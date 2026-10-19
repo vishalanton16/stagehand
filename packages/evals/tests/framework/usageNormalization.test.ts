@@ -37,7 +37,7 @@ describe("normalizeUsage", () => {
     expect(usage.input_total + usage.output + usage.reasoning).toBe(1250);
   });
 
-  it.each(["eve", "mastra", "pi", "codex", "cursor", "cursor_sdk"])(
+  it.each(["eve", "mastra", "pi", "codex", "cursor", "cursor_sdk", "opencode"])(
     "treats zero-filled %s telemetry with no presence flag as unknown",
     (harness) => {
       const raw = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -217,6 +217,29 @@ describe("normalizeUsage", () => {
       input_uncached: 12,
       input_cached: 30,
       input_cache_write: 8,
+    });
+  });
+
+  it("keeps OpenCode reasoning separate from visible output", () => {
+    const usage = normalizeUsage({
+      harness: "opencode",
+      raw: {
+        inputTokens: 10,
+        cachedInputTokens: 30,
+        cacheCreationInputTokens: 8,
+        outputTokens: 5,
+        reasoningOutputTokens: 12,
+        totalTokens: 65,
+      },
+    });
+    expect(usage).toMatchObject({
+      input_total: 48,
+      input_uncached: 10,
+      input_cached: 30,
+      input_cache_write: 8,
+      output: 5,
+      reasoning: 12,
+      reasoning_in_output: false,
     });
   });
 

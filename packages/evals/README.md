@@ -148,3 +148,19 @@ Use the [observation task recorder](tasks/README.md) to capture a rendered
 page for a static `extract()` or `observe()` regression. It provides a standalone
 HTML artifact and provenance metadata; dynamic application replay is outside its
 scope.
+
+## OpenCode
+
+The OpenCode harness uses the embedded SDK with the shared MCP browser runtime.
+It supports `stagehand_facade`, `playwright_mcp`, and `chrome_devtools_mcp`.
+Export a provider API key and select a model in `provider/model` form:
+
+```bash
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
+evals run b:webvoyager --harness opencode --tool stagehand_facade \
+  --model anthropic/claude-sonnet-4-6 -l 1 -t 1 -e browserbase
+```
+
+Set `EVAL_OPENCODE_MAX_STEPS` to override the tool-call budget. The default is 50,
+subject to the shared dataset and `AGENT_EVAL_MAX_STEPS` precedence. Each run uses
+an isolated workspace and config directory; saved OpenCode CLI logins are not reused.

@@ -650,6 +650,9 @@ importers:
       '@browserbasehq/stagehand-integrations-mastra-sdk':
         specifier: workspace:*
         version: link:../integrations/mastra-sdk
+      '@browserbasehq/stagehand-integrations-opencode-sdk':
+        specifier: workspace:*
+        version: link:../integrations/opencode-sdk
       '@browserbasehq/stagehand-integrations-pi-sdk':
         specifier: workspace:*
         version: link:../integrations/pi-sdk
