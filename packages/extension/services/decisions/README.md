@@ -36,8 +36,8 @@ namespace call without a config is an error. Evals send their tasks' calls to th
 | `provider`             | Model (default)                 | Needs                 | Wire format                                                                  | Verified                              |
 | ---------------------- | ------------------------------- | --------------------- | ---------------------------------------------------------------------------- | ------------------------------------- |
 | `"typesafe"` (default) | Jev (`jev-latest`)              | `apiKey`              | System One: `{ state, questions }` → `{ answers }`                           | Live, and by every eval in this stack |
-| `"cloudflare"`         | Clef (`clef`, or `clef-flash`)  | `apiKey`, `accountId` | System One body on Workers AI `/ai/run/@cf/cloudflare/<model>`, `{ result }` | Against the documented format         |
-| `"perplexity"`         | Decider (`pplx-decider-latest`) | `apiKey`              | System One body on `/v1/decisions`                                           | Against the documented format         |
+| `"cloudflare"`         | Clef (`clef`, or `clef-flash`)  | `apiKey`, `accountId` | System One body on Workers AI `/ai/run/@cf/cloudflare/<model>`, `{ result }` | Live conformance                      |
+| `"perplexity"`         | Decider (`pplx-decider-latest`) | `apiKey`              | System One body on `/v1/decisions`                                           | Live conformance                      |
 
 What `client.ts` does for all of them, so the pipeline sees one behaviour:
 
@@ -202,7 +202,7 @@ logs its instruction and a trace of candidate descriptions at info level.
 
 ## Known limits
 
-- Decision-model usage is logged but not part of `result.metadata.usage`. With `tools`, an argument LLM call
+- Choice and Noul provider usage is logged as `decisions-usage`. Native extract usage also contributes to `result.metadata.usage`. With `tools`, an argument LLM call
   started speculatively and not used finishes after the act has returned, and its tokens are not
   counted anywhere.
 - Thresholds (0.7 accept, 0.9 none veto, 0.7 held-pick cap) were set on the act and breadth suites.

@@ -1,4 +1,8 @@
 import OpenAI from "openai";
+import type { BenchTaskContext } from "../../evals/framework/types.js";
+import { EvalLogger } from "../../evals/logger.js";
+import dropdown from "../../evals/tasks/bench/act/dropdown.js";
+import geniusee from "../../evals/tasks/bench/extract/extract_geniusee.js";
 import { z } from "zod/v4";
 import { localBrowser, Stagehand, type ExperimentalDecisionsConfig } from "../src/index.js";
 import { generateWithOpenAI } from "./openaiStructuredGeneration.js";
@@ -44,7 +48,7 @@ const scenarios = [
   {
     name: "dropdown",
     operation: "act",
-    url: "https://stagehand-eval-sites.vercel.app/sites/dropdown/",
+    url: "",
   },
   {
     name: "checkout",
@@ -55,6 +59,16 @@ const scenarios = [
         "<button>Keep shopping</button><button onclick=\"document.querySelector('#status').textContent='checkout'\">Proceed to checkout</button><p id=\"status\">cart</p>",
       ),
   },
+  {
+    name: "observe-checkout",
+    operation: "observe",
+    url:
+      "data:text/html," +
+      encodeURIComponent(
+        '<button>Keep shopping</button><button id="checkout">Proceed to checkout</button>',
+      ),
+  },
+  { name: "geniusee", operation: "extract", url: "" },
   { name: "linear", operation: "extract", url: "https://linear.app/pricing" },
   {
     name: "list",
@@ -67,7 +81,9 @@ const scenarios = [
   },
 ];
 for (let round = 0; round < rounds; round++) {
-  for (const scenario of scenarios) {
+  for (const scenario of scenarios.filter(
+    (item) => !env.BENCHMARK_TASK || env.BENCHMARK_TASK === item.name,
+  )) {
     const arms = Object.entries(configs).filter(
       ([name, config]) =>
         (!config || config.apiKey) &&
@@ -110,26 +126,65 @@ for (let round = 0; round < rounds; round++) {
         });
         try {
           const page = await browser.context.newPage();
-          await page.goto(scenario.url);
+          if (scenario.url) await page.goto(scenario.url);
           const client = experimentalDecisions ? stagehand.experimentalDecisions : stagehand;
-          if (scenario.name === "dropdown")
-            await page.locator("xpath=/html/body/div/div/button").click();
-          started = performance.now();
-          if (scenario.operation === "act") {
-            const action =
-              scenario.name === "dropdown"
-                ? "type 'test fill' into the input field"
-                : "click the checkout button";
-            const result = await client.act(action, { page, cache: false, timeout: 30_000 });
+          if (scenario.name === "dropdown" || scenario.name === "geniusee") {
+            const task = scenario.name === "dropdown" ? dropdown : geniusee;
+            const result = await task.fn({
+              page,
+              stagehand: {
+                act: (instruction: string, options: object) => {
+                  started = performance.now();
+                  return client
+                    .act(instruction, { ...options, page, cache: false, timeout: 30_000 })
+                    .finally(() => {
+                      elapsed = performance.now() - started!;
+                    });
+                },
+                extract: (instruction: string, schema: z.ZodType, options: object) => {
+                  started = performance.now();
+                  return client
+                    .extract(instruction, schema, {
+                      ...options,
+                      page,
+                      cache: false,
+                      timeout: 30_000,
+                    })
+                    .finally(() => {
+                      elapsed = performance.now() - started!;
+                    });
+                },
+              },
+              logger: new EvalLogger(false),
+              debugUrl: "",
+              sessionUrl: "",
+            } as unknown as BenchTaskContext);
+            passed = result?._success === true;
+            if (result?.error) error = String(result.error);
+          } else if (scenario.operation === "act") {
+            started = performance.now();
+            const result = await client.act("click the checkout button", {
+              page,
+              cache: false,
+              timeout: 30_000,
+            });
             elapsed = performance.now() - started;
+            value = await page.locator("#status").textContent();
+            passed = result.data.success && value === "checkout";
+          } else if (scenario.operation === "observe") {
+            started = performance.now();
+            const result = await client.observe("Find the button that proceeds to checkout", {
+              page,
+              cache: false,
+              timeout: 30_000,
+            });
+            elapsed = performance.now() - started;
+            const action = result.data[0];
             value =
-              scenario.name === "dropdown"
-                ? await page.locator("xpath=/html/body/div/input").inputValue()
-                : await page.locator("#status").textContent();
-            passed =
-              result.data.success &&
-              value === (scenario.name === "dropdown" ? "test fill" : "checkout");
+              action?.method === "click" && (await page.locator(action.selector).textContent());
+            passed = value === "Proceed to checkout";
           } else if (scenario.name === "linear") {
+            started = performance.now();
             const result = await client.extract(
               "Find the Basic and Business monthly prices in USD per user when billed annually.",
               pricingSchema,
@@ -139,6 +194,7 @@ for (let round = 0; round < rounds; round++) {
             value = result.data;
             passed = result.data.basic === 10 && result.data.business === 16;
           } else {
+            started = performance.now();
             const result = await client.extract(
               "Extract all plans and their USD prices in table order.",
               z.object({ plans: z.array(z.object({ plan: z.string(), price: z.number() })) }),
