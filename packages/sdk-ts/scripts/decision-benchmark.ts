@@ -86,10 +86,12 @@ for (let round = 0; round < rounds; round++) {
   )) {
     const arms = Object.entries(configs).filter(
       ([name, config]) =>
+        (!env.BENCHMARK_ARM || name === env.BENCHMARK_ARM) &&
         (!config || config.apiKey) &&
         (scenario.operation === "extract" ||
           !["clairic", "locate", "locateFlash", "judge"].includes(name)),
     );
+    if (arms.length === 0) throw new Error("No benchmark arms selected");
     const offset = round % arms.length;
     for (const [arm, experimentalDecisions] of [...arms.slice(offset), ...arms.slice(0, offset)]) {
       const browser = await localBrowser.launch({ headless: true });
@@ -160,7 +162,8 @@ for (let round = 0; round < rounds; round++) {
               sessionUrl: "",
             } as unknown as BenchTaskContext);
             passed = result?._success === true;
-            if (result?.error) error = String(result.error);
+            if (typeof result?.error === "string") error = result.error;
+            else if (result?.error instanceof Error) error = result.error.message;
           } else if (scenario.operation === "act") {
             started = performance.now();
             const result = await client.act("click the checkout button", {
@@ -218,7 +221,7 @@ for (let round = 0; round < rounds; round++) {
       } finally {
         await browser.close();
       }
-      console.log(
+      process.stdout.write(
         JSON.stringify({
           round,
           task: scenario.name,
@@ -229,7 +232,7 @@ for (let round = 0; round < rounds; round++) {
           error,
           decisionUsage,
           llmUsage,
-        }),
+        }) + "\n",
       );
     }
   }

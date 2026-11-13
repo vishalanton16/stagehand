@@ -35,7 +35,7 @@ for (const [group, rows] of groups) {
         ([input, output, cached]) => (input - cached) * 0.1 + cached * 0.01 + output * 0.5,
       )) /
     1_000_000;
-  console.log(
+  process.stdout.write(
     JSON.stringify({
       group,
       attempts: rows.length,
@@ -51,6 +51,6 @@ for (const [group, rows] of groups) {
       llmInput: sum(llm, ([input]) => input),
       llmOutput: sum(llm, ([, output]) => output),
       estimatedUsd,
-    }),
+    }) + "\n",
   );
 }
