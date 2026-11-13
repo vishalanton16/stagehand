@@ -1511,6 +1511,42 @@ export const TelemetryConfigSchema = z
   })
   .meta({ id: "TelemetryConfig" });
 
+export const ExperimentalDecisionsConfigSchema = z
+  .strictObject({
+    provider: z.enum(["typesafe", "cloudflare", "perplexity"]).optional().meta({
+      description:
+        "Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider",
+    }),
+    apiKey: z.string().min(1),
+    model: z.string().min(1).optional(),
+    apiUrl: z
+      .string()
+      // A regex (not a refine) so the constraint reaches the generated JSON schema and SDK types.
+      .regex(/^https:\/\/[^\s?#]+$/, "apiUrl must be https, without query or fragment")
+      .optional(),
+    accountId: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .optional()
+      .meta({ description: 'Cloudflare account id; required for provider "cloudflare"' }),
+    retryNoEffect: z.boolean().optional(),
+    focusFallback: z.boolean().optional(),
+    cacheCheck: z.boolean().optional(),
+    extract: z.enum(["judge", "pick", "native"]).optional(),
+    actConfidence: z.number().min(0).max(1).optional(),
+    verify: z.enum(["off", "checks", "full"]).optional(),
+    llmFallback: z.boolean().optional(),
+    argumentLlm: z.boolean().optional(),
+    pageState: z.boolean().optional(),
+    tools: z.boolean().optional(),
+    targetReadiness: z.boolean().optional(),
+  })
+  .meta({
+    id: "ExperimentalDecisionsConfig",
+    description:
+      "Experimental: configures stagehand.experimentalDecisions, whose act(), observe() and extract() are resolved by a decision model (typed questions answered with probabilities) and fall back to the LLM pipeline when it is not confident",
+  });
+
 export const StagehandInitParamsSchema = z
   .strictObject({
     protocolVersion: StagehandProtocolVersionSchema,
@@ -1531,6 +1567,7 @@ export const StagehandInitParamsSchema = z
       description:
         "Server-side caching of act/observe/extract results for this instance: a boolean toggle, or an object with an optional hit-count threshold. Requires client Browserbase transport and a browser sessionId. Can be overridden per request via options.cache.",
     }),
+    experimentalDecisions: ExperimentalDecisionsConfigSchema.optional(),
   })
   .refine((params) => params.browserbase === undefined || params.browser !== undefined, {
     message: "Client Browserbase transport requires browser metadata",

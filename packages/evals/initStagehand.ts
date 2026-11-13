@@ -31,7 +31,6 @@ export type StagehandInitResult = {
 };
 
 const PROVIDER_API_KEY_ENV: Record<string, string[]> = {
-  openai: ["OPENAI_API_KEY"],
   anthropic: ["ANTHROPIC_API_KEY"],
   google: ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
   groq: ["GROQ_API_KEY"],
@@ -77,6 +76,71 @@ export async function initStagehand({
         `Stagehand requires an explicit model API key ` +
         `(checked: ${keyEnvVars.join(", ") || "no known provider prefix"}).`,
     );
+  }
+
+  // EVAL_DECISIONS=1 sends the tasks' act() calls (and observe()/extract() with their own
+  // switches) to stagehand.experimentalDecisions, which falls back to the configured model
+  // when the decision model abstains.
+  const useDecisions = process.env.EVAL_DECISIONS === "1";
+  let experimentalDecisions: StagehandCreateOptions["experimentalDecisions"];
+  if (!useDecisions && process.env.EVAL_DECISIONS_INSTRUMENT === "1") {
+    // Baseline arm: stagehand.act() never asks the decision model; being configured only
+    // turns on the per-act timing log the report parses.
+    experimentalDecisions = { apiKey: "instrument-only" };
+  }
+  const decisionsObserve = useDecisions && process.env.EVAL_DECISIONS_OBSERVE === "1";
+  const decisionsExtract =
+    useDecisions &&
+    (process.env.EVAL_DECISIONS_EXTRACT === "pick" ||
+      process.env.EVAL_DECISIONS_EXTRACT === "judge" ||
+      process.env.EVAL_DECISIONS_EXTRACT === "native");
+  if (useDecisions) {
+    // EVAL_DECISIONS_PROVIDER: typesafe (default) | cloudflare | perplexity
+    const keyNames = {
+      typesafe: "TYPESAFE_API_KEY",
+      cloudflare: "CLOUDFLARE_AUTH_TOKEN",
+      perplexity: "PERPLEXITY_API_KEY",
+    } as const;
+    const requested = process.env.EVAL_DECISIONS_PROVIDER ?? "typesafe";
+    if (!(requested in keyNames)) {
+      throw new Error(`Stagehand init: unknown EVAL_DECISIONS_PROVIDER "${requested}"`);
+    }
+    const provider = requested as keyof typeof keyNames;
+    const keyName = keyNames[provider];
+    const decisionsApiKey = resolveKey(keyName).value;
+    if (!decisionsApiKey) {
+      throw new Error(
+        `Stagehand init: EVAL_DECISIONS=1 with provider "${provider}" requires ${keyName}`,
+      );
+    }
+    if (provider === "cloudflare" && !process.env.CLOUDFLARE_ACCOUNT_ID) {
+      throw new Error('Stagehand init: provider "cloudflare" requires CLOUDFLARE_ACCOUNT_ID');
+    }
+    const actConfidence = Number(process.env.EVAL_DECISIONS_CONFIDENCE);
+    experimentalDecisions = {
+      ...(provider === "typesafe" ? {} : { provider }),
+      apiKey: decisionsApiKey,
+      ...(provider === "cloudflare" ? { accountId: process.env.CLOUDFLARE_ACCOUNT_ID } : {}),
+      ...(process.env.EVAL_DECISIONS_MODEL ? { model: process.env.EVAL_DECISIONS_MODEL } : {}),
+      ...(Number.isFinite(actConfidence) && process.env.EVAL_DECISIONS_CONFIDENCE
+        ? { actConfidence }
+        : {}),
+      ...(process.env.EVAL_DECISIONS_VERIFY === "0"
+        ? { verify: "off" }
+        : process.env.EVAL_DECISIONS_VERIFY === "full"
+          ? { verify: "full" }
+          : {}),
+      ...(process.env.EVAL_DECISIONS_LLM_FALLBACK === "0" ? { llmFallback: false } : {}),
+      ...(process.env.EVAL_DECISIONS_ARG_LLM === "0" ? { argumentLlm: false } : {}),
+      ...(process.env.EVAL_DECISIONS_TOOLS === "1" ? { tools: true } : {}),
+      ...(process.env.EVAL_DECISIONS_READINESS === "1" ? { targetReadiness: true } : {}),
+      ...(decisionsExtract
+        ? { extract: process.env.EVAL_DECISIONS_EXTRACT as "pick" | "judge" | "native" }
+        : {}),
+      ...(process.env.EVAL_DECISIONS_CACHE_CHECK === "1" ? { cacheCheck: true } : {}),
+      ...(process.env.EVAL_DECISIONS_RETRY === "1" ? { retryNoEffect: true } : {}),
+      ...(process.env.EVAL_DECISIONS_FOCUS === "1" ? { focusFallback: true } : {}),
+    };
   }
 
   // `browser` is a factory-built handle rather than a config object:
@@ -143,7 +207,16 @@ export async function initStagehand({
       selfHeal: true,
       model: { modelName, apiKey } as NonNullable<StagehandCreateOptions["model"]>,
       logging: { onLog: createStagehandOnLog(logger) },
+      ...(experimentalDecisions ? { experimentalDecisions } : {}),
     });
+    if (useDecisions) {
+      // Tasks call stagehand.act()/observe()/extract(); in this arm those calls are the
+      // namespace's, so the same task files measure both paths.
+      const decisions = stagehand.experimentalDecisions;
+      stagehand.act = decisions.act.bind(decisions);
+      if (decisionsObserve) stagehand.observe = decisions.observe.bind(decisions);
+      if (decisionsExtract) stagehand.extract = decisions.extract.bind(decisions);
+    }
   } catch (error) {
     await cleanup();
     throw error;

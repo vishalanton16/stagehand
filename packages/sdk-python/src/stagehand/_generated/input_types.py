@@ -248,6 +248,25 @@ class EmptyParams(TypedDict):
     pass
 
 
+class ExperimentalDecisionsConfig(TypedDict):
+    provider: NotRequired[Literal["typesafe", "cloudflare", "perplexity"]]
+    api_key: str
+    model: NotRequired[str]
+    api_url: NotRequired[str]
+    account_id: NotRequired[str]
+    retry_no_effect: NotRequired[bool]
+    focus_fallback: NotRequired[bool]
+    cache_check: NotRequired[bool]
+    extract: NotRequired[Literal["judge", "pick", "native"]]
+    act_confidence: NotRequired[float]
+    verify: NotRequired[Literal["off", "checks", "full"]]
+    llm_fallback: NotRequired[bool]
+    argument_llm: NotRequired[bool]
+    page_state: NotRequired[bool]
+    tools: NotRequired[bool]
+    target_readiness: NotRequired[bool]
+
+
 class ExternalProxyConfig(TypedDict):
     type: Literal["external"]
     server: str
@@ -1205,6 +1224,7 @@ class StagehandInitParams(TypedDict):
     self_heal: NotRequired[bool]
     dom_settle_timeout_ms: NotRequired[int]
     cache: NotRequired[Caching]
+    experimental_decisions: NotRequired[ExperimentalDecisionsConfig]
 
 
 VariablePrimitive: TypeAlias = str | float | bool

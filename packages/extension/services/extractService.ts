@@ -1,3 +1,10 @@
+import { extractWithClairic } from "./decisions/clairic.js";
+import { extractWithDecider } from "./decisions/decider.js";
+import { TimeoutError } from "../errors.js";
+import { extractionCompleted } from "./decisions/extractCheck.js";
+import { runDecisionsExtract, type JsonSchema } from "./decisions/extract.js";
+import type { DecisionsConfig } from "./decisions/pipeline.js";
+import { parseOutline } from "./decisions/tree.js";
 import { z } from "zod/v4";
 import type {
   ClientModelReference,
@@ -47,6 +54,7 @@ type ExtractServiceOptions = {
   systemPrompt?: string;
   cache?: cacheService.CacheContext;
   gateway?: GatewayContext;
+  decisions?: DecisionsConfig;
   progress?: Progress;
 };
 
@@ -67,10 +75,22 @@ async function extractWithProgress(
     systemPrompt = "",
     cache,
     gateway,
+    decisions,
   }: ExtractServiceOptions,
   progress: Progress,
 ): Promise<ExtractResult> {
   const { instruction, options } = params;
+  if (decisions) {
+    decisions = {
+      ...decisions,
+      signal: progress.signal,
+      recordDecisionUsage: (usage) =>
+        logger.info("Decision model usage", {
+          category: "decisions-usage",
+          ...usage,
+        }),
+    };
+  }
 
   // Cache keys contain DOM state, not screenshot pixels. Do not serve a
   // visual extraction from a cache entry that cannot represent its image.
@@ -96,7 +116,7 @@ async function extractWithProgress(
 
   async function runExtraction(): Promise<cacheService.CacheExecuteOutcome<ExtractResult>> {
     progress.throwIfStopped();
-    const { combinedTree, combinedUrlMap } = await page.captureSnapshot(
+    const snapshot = await page.captureSnapshot(
       {
         focusLocator: options?.locator,
         ignoreLocators: options?.ignoreLocators,
@@ -105,6 +125,47 @@ async function extractWithProgress(
     );
     progress.throwIfStopped();
 
+    const { combinedTree, combinedUrlMap } = snapshot;
+    let nativeUsage = zeroStagehandResultUsage();
+    if (decisions?.extract === "native" && instruction) {
+      try {
+        const common = {
+          params,
+          systemPrompt,
+          progress,
+          page: { captureSnapshot: async () => snapshot, screenshot: page.screenshot.bind(page) },
+          recordUsage: (usage: typeof nativeUsage) => {
+            nativeUsage = usage;
+            logger.info("Decision model usage", {
+              category: "decisions-usage",
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+            });
+          },
+        };
+        const result =
+          decisions.provider === "cloudflare" && decisions.accountId
+            ? await extractWithClairic({
+                ...common,
+                model: { apiKey: decisions.apiKey, accountId: decisions.accountId },
+              })
+            : decisions.provider === "perplexity"
+              ? await extractWithDecider({
+                  ...common,
+                  model: {
+                    apiKey: decisions.apiKey,
+                    modelName: decisions.model ?? "pplx-decider-latest",
+                  },
+                })
+              : undefined;
+        if (result) return { result, cacheValue: result.data };
+        throw new Error("Native extraction requires Cloudflare Clairic or Perplexity Decider");
+      } catch (error) {
+        progress.throwIfStopped();
+        if (decisions.llmFallback === false) throw error;
+        logger.info("Native extraction fell back to the LLM", { category: "decisions" });
+      }
+    }
     const screenshot = options?.screenshot
       ? await page.screenshot({ fullPage: false, type: "png" }, progress)
       : undefined;
@@ -121,6 +182,44 @@ async function extractWithProgress(
     );
 
     const schema = z.fromJSONSchema(params.schema as Parameters<typeof z.fromJSONSchema>[0]);
+
+    // Pick-and-copy: the decision model chooses the elements that hold the values, code copies
+    // their text. Screenshot-based extraction stays with the LLM.
+    if (decisions?.extract === "pick" && instruction && !screenshot) {
+      const outcome = await runDecisionsExtract(decisions, {
+        logger,
+        instruction,
+        schema: params.schema as JsonSchema,
+        snap: { tree: combinedTree, xpathMap: {}, nodes: parseOutline(combinedTree) },
+        urlMap: (combinedUrlMap ?? {}) as Record<string, string>,
+        ensureTimeRemaining: () => progress.throwIfStopped(),
+        gate: decisions.llmFallback !== false,
+      }).catch((error: unknown) => {
+        if (error instanceof TimeoutError) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        return { kind: "fallback" as const, reason: `decision_error:${message}` };
+      });
+      const valid = outcome.kind === "done" ? schema.safeParse(outcome.data) : undefined;
+      if (outcome.kind === "done" && valid?.success) {
+        return {
+          result: {
+            data: z.json().parse(valid.data),
+            metadata: { usage: zeroStagehandResultUsage(), cache: disabledCacheMetadata() },
+          },
+          cacheValue: valid.data,
+          llmUsage: { inputTokens: 0, outputTokens: 0, llmDurationMs: 0 },
+        };
+      }
+      const reason = outcome.kind === "fallback" ? outcome.reason : "schema_mismatch";
+      logger.info("Decisions extract fell back to the LLM", {
+        category: "decisions",
+        instruction,
+        reason,
+      });
+      if (decisions.llmFallback === false) {
+        throw new Error(`Decisions extract abstained (${reason})`);
+      }
+    }
     const isObjectSchema = schema instanceof z.ZodObject;
     const wrapKey = "value" as const;
     const objectSchema: z.ZodObject = isObjectSchema
@@ -150,6 +249,31 @@ async function extractWithProgress(
           ),
         userProvidedInstructions: systemPrompt,
         screenshot: screenshotContent,
+        ...(decisions && decisions.extract !== "native" && instruction
+          ? {
+              judgeCompleted: async (extracted: unknown) => {
+                const trace: Record<string, unknown>[] = [];
+                const verdict = await extractionCompleted(
+                  {
+                    config: decisions,
+                    instruction,
+                    trace: trace as never,
+                    threshold: 0.5,
+                    logger,
+                    ensureTimeRemaining: () => progress.throwIfStopped(),
+                  },
+                  extracted,
+                );
+                logger.info("Decisions extract completion", {
+                  category: "decisions",
+                  instruction,
+                  score: verdict.score,
+                  trace: JSON.stringify(trace),
+                });
+                return verdict.completed;
+              },
+            }
+          : {}),
       });
     progress.throwIfStopped();
 
@@ -193,11 +317,11 @@ async function extractWithProgress(
         data: z.json().parse(output),
         metadata: {
           usage: {
-            inputTokens: prompt_tokens,
-            outputTokens: completion_tokens,
+            inputTokens: prompt_tokens + nativeUsage.inputTokens,
+            outputTokens: completion_tokens + nativeUsage.outputTokens,
             reasoningTokens: reasoning_tokens,
             cachedInputTokens: cached_input_tokens,
-            inferenceTimeMs: inference_time_ms,
+            inferenceTimeMs: inference_time_ms + nativeUsage.inferenceTimeMs,
           },
           cache: disabledCacheMetadata(),
         },

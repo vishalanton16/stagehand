@@ -610,6 +610,37 @@ class EmptyParams(WireModel):
     )
 
 
+class ExperimentalDecisionsConfig(WireModel):
+    """Experimental: configures stagehand.experimentalDecisions, whose act(), observe() and extract() are resolved by a decision model (typed questions answered with probabilities) and fall back to the LLM pipeline when it is not confident"""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        validate_by_name=True,
+    )
+    provider: Optional[Provider] = None
+    """Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider"""
+    api_key: Annotated[StrictStr, Field(min_length=1)]
+    model: Annotated[Optional[StrictStr], Field(min_length=1)] = None
+    api_url: Annotated[Optional[StrictStr], Field(pattern="^https:\\/\\/[^\\s?#]+$")] = (
+        None
+    )
+    account_id: Annotated[Optional[StrictStr], Field(pattern="^[A-Za-z0-9_-]{1,64}$")] = (
+        None
+    )
+    """Cloudflare account id; required for provider "cloudflare\""""
+    retry_no_effect: Optional[StrictBool] = None
+    focus_fallback: Optional[StrictBool] = None
+    cache_check: Optional[StrictBool] = None
+    extract: Optional[Extract] = None
+    act_confidence: Annotated[Optional[StrictFloat], Field(ge=0.0, le=1.0)] = None
+    verify: Optional[Verify] = None
+    llm_fallback: Optional[StrictBool] = None
+    argument_llm: Optional[StrictBool] = None
+    page_state: Optional[StrictBool] = None
+    tools: Optional[StrictBool] = None
+    target_readiness: Optional[StrictBool] = None
+
+
 class ExternalProxyConfig(WireModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -620,6 +651,12 @@ class ExternalProxyConfig(WireModel):
     domain_pattern: Optional[StrictStr] = None
     username: Optional[StrictStr] = None
     password: Optional[StrictStr] = None
+
+
+class Extract(StrEnum):
+    judge = "judge"
+    pick = "pick"
+    native = "native"
 
 
 class ExtractOptions(WireModel):
@@ -2160,6 +2197,16 @@ class Polling(RootModel[StrictFloat]):
     root: Annotated[StrictFloat, Field(gt=0.0, le=2147483647.0)]
 
 
+class Provider(StrEnum):
+    """
+    Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider
+    """
+
+    typesafe = "typesafe"
+    cloudflare = "cloudflare"
+    perplexity = "perplexity"
+
+
 class ProxyConfig(RootModel[Union[BrowserbaseProxyConfig, ExternalProxyConfig]]):
     root: Union[BrowserbaseProxyConfig, ExternalProxyConfig]
 
@@ -2337,6 +2384,7 @@ class StagehandInitParams(StagehandInitParamsValidation):
     ] = None
     cache: Optional[Caching] = None
     """Server-side caching of act/observe/extract results for this instance: a boolean toggle, or an object with an optional hit-count threshold. Requires client Browserbase transport and a browser sessionId. Can be overridden per request via options.cache."""
+    experimental_decisions: Optional[ExperimentalDecisionsConfig] = None
 
 
 class StagehandInitResult(WireModel):
@@ -2489,6 +2537,12 @@ class VariableValue(RootModel[Union[VariablePrimitive, DescribedVariableValue]])
 
 class Variables(RootModel[dict[StrictStr, VariableValue]]):
     root: dict[StrictStr, VariableValue]
+
+
+class Verify(StrEnum):
+    off = "off"
+    checks = "checks"
+    full = "full"
 
 
 class WebMCPAnnotation(WireModel):

@@ -131,6 +131,8 @@ export async function extract<T extends z.ZodObject>(params: {
   generate: GenerateLlm;
   userProvidedInstructions?: string;
   screenshot?: LLMImageContent;
+  /** Replaces the metadata LLM call; a throw falls back to it. */
+  judgeCompleted?: (extracted: unknown) => Promise<boolean>;
 }): Promise<
   z.infer<T> & {
     metadata: z.infer<typeof ExtractMetadataSchema>;
@@ -150,13 +152,22 @@ export async function extract<T extends z.ZodObject>(params: {
     promptText(buildExtractSystemPrompt(false, userProvidedInstructions, Boolean(screenshot))),
     buildExtractUserPrompt(instruction, domElements, false, screenshot),
   );
-  const metadata = await generateStructured(
-    generate,
-    "Metadata",
-    ExtractMetadataSchema,
-    promptText(buildMetadataSystemPrompt()),
-    promptText(buildMetadataPrompt(instruction, extraction.data)),
-  );
+  // Deferred so a synchronous throw in the judge falls back like a rejection.
+  const judged = params.judgeCompleted
+    ? await Promise.resolve()
+        .then(() => params.judgeCompleted!(extraction.data))
+        .catch(() => undefined)
+    : undefined;
+  const metadata =
+    judged === undefined
+      ? await generateStructured(
+          generate,
+          "Metadata",
+          ExtractMetadataSchema,
+          promptText(buildMetadataSystemPrompt()),
+          promptText(buildMetadataPrompt(instruction, extraction.data)),
+        )
+      : { data: { progress: "", completed: judged }, usage: undefined, durationMs: 0 };
 
   return {
     ...extraction.data,
@@ -243,5 +254,135 @@ export async function act(params: {
     reasoning_tokens: result.usage?.reasoningTokens ?? 0,
     cached_input_tokens: result.usage?.cachedInputTokens ?? 0,
     inference_time_ms: result.durationMs,
+  };
+}
+
+const ActTextArgumentSchema = z
+  .object({
+    text: z
+      .string()
+      .nullable()
+      .describe(
+        "The exact text the instruction wants typed, copied verbatim from the instruction, or the %variable% placeholder that stands for it. Null when the instruction does not say what to type.",
+      ),
+  })
+  .strict();
+
+/**
+ * Argument-only inference for the experimental decisions act path: no page content,
+ * just the instruction, returning the literal text to type. The element is
+ * chosen elsewhere.
+ */
+export async function actTextArgument(params: {
+  instruction: string;
+  variableNames: string[];
+  generate: GenerateLlm;
+}): Promise<{
+  text: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  reasoning_tokens: number;
+  cached_input_tokens: number;
+  inference_time_ms: number;
+}> {
+  // Variable names are caller data: they go in the data message, never the system prompt.
+  const variables =
+    params.variableNames.length > 0
+      ? `\ndeclared variables: ${params.variableNames.map((name) => `%${name}%`).join(", ")}`
+      : "";
+  const result = await generateStructured(
+    params.generate,
+    "ActTextArgument",
+    ActTextArgumentSchema,
+    "You extract one argument from a browser-automation instruction: the literal text the user wants typed into a field. Copy it verbatim from the instruction; never paraphrase, translate, or invent. Do not return the name of the field. If a declared %variable% placeholder stands for the text, return it as written including the percent signs.",
+    `instruction: ${params.instruction}${variables}`,
+  );
+  return {
+    text: result.data.text,
+    prompt_tokens: result.usage?.inputTokens ?? 0,
+    completion_tokens: result.usage?.outputTokens ?? 0,
+    reasoning_tokens: result.usage?.reasoningTokens ?? 0,
+    cached_input_tokens: result.usage?.cachedInputTokens ?? 0,
+    inference_time_ms: result.durationMs,
+  };
+}
+
+/**
+ * Argument-only inference for a WebMCP tool the decision model already chose: the prompt is
+ * one tool, not the catalog, and the tool's own input schema shapes the answer.
+ */
+export async function toolArguments(params: {
+  instruction: string;
+  tool: { name: string; description: string; inputSchema?: Record<string, unknown> };
+  variableNames: string[];
+  generate: GenerateLlm;
+}): Promise<{
+  input: Record<string, unknown> | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  reasoning_tokens: number;
+  cached_input_tokens: number;
+  inference_time_ms: number;
+}> {
+  const startedAt = Date.now();
+  const variables =
+    params.variableNames.length > 0
+      ? ` Declared variables: ${params.variableNames.map((name) => `%${name}%`).join(", ")}; when one stands for a value, return it as written including the percent signs.`
+      : "";
+  const request = (schema: Record<string, unknown>, extra: string) =>
+    params.generate({
+      systemPrompt: `You fill in the input of one tool from a user's request. Use only values the request states or clearly implies; leave optional parameters out otherwise.${variables}${extra}`,
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `tool: ${JSON.stringify(params.tool)}\nrequest: ${params.instruction}`,
+          },
+        },
+      ],
+      responseFormat: { type: "json_schema", name: "ToolInput", schema: z.json().parse(schema) },
+    });
+  // A site's schema is whatever the site wrote; providers with strict
+  // structured output reject some of them (optional properties, keywords they
+  // do not know). Then the input travels as a JSON string instead.
+  let content: unknown;
+  let response: Awaited<ReturnType<GenerateLlm>>;
+  const properties = Object.keys((params.tool.inputSchema?.properties as object | undefined) ?? {});
+  const required = params.tool.inputSchema?.required;
+  // Optional properties are the common rejection; do not pay a failed call to find out.
+  const strictFriendly =
+    Array.isArray(required) && properties.every((name) => required.includes(name));
+  try {
+    if (!strictFriendly) throw new Error("schema has optional properties");
+    response = await request({ type: "object", ...params.tool.inputSchema }, "");
+    content = response.outputFormat === "json_schema" ? response.structuredContent : null;
+  } catch {
+    response = await request(
+      {
+        type: "object",
+        properties: { input_json: { type: "string" } },
+        required: ["input_json"],
+        additionalProperties: false,
+      },
+      " Return the tool's input object serialised as JSON in input_json.",
+    );
+    const wrapped = response.outputFormat === "json_schema" ? response.structuredContent : null;
+    try {
+      content = JSON.parse((wrapped as { input_json?: string } | null)?.input_json ?? "null");
+    } catch {
+      content = null;
+    }
+  }
+  return {
+    input:
+      content && typeof content === "object" && !Array.isArray(content)
+        ? (content as Record<string, unknown>)
+        : null,
+    prompt_tokens: response.usage?.inputTokens ?? 0,
+    completion_tokens: response.usage?.outputTokens ?? 0,
+    reasoning_tokens: response.usage?.reasoningTokens ?? 0,
+    cached_input_tokens: response.usage?.cachedInputTokens ?? 0,
+    inference_time_ms: Date.now() - startedAt,
   };
 }
