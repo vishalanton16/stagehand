@@ -38,7 +38,7 @@ const schemaNode = z.object({
   anyOf: z.array(z.unknown()).optional(),
 });
 
-function compileField(raw: unknown, name: string, task: string) {
+function compileField(raw: unknown, name: string, task: string, questionStyle: "exact" | "source") {
   const original = schemaNode.parse(raw);
   let node = original;
   if (original.anyOf?.length === 2) {
@@ -66,16 +66,36 @@ function compileField(raw: unknown, name: string, task: string) {
       ? `Find each value for ${target} as a separate span.`
       : `Find the exact value for ${target}.`,
     description,
-    type === "string" ? undefined : "Return the number as written, without surrounding text.",
+    type === "string" || questionStyle === "source"
+      ? undefined
+      : "Return the number as written, without surrounding text.",
   ]
     .filter(Boolean)
     .join("\n");
-  return { name, type, list, nullable: node !== original, instructions };
+  return {
+    name,
+    type,
+    list,
+    nullable: node !== original,
+    instructions:
+      questionStyle === "source" && description
+        ? `Find ${list ? "each source span for" : "the source span for"} ${description}.`
+        : instructions,
+  };
 }
 
-function parseNumber(text: string): number | undefined {
+function parseNumber(text: string, questionStyle: "exact" | "source"): number | undefined {
   // Accept a single decimal value with optional grouping and a currency symbol.
-  const value = text
+  const source =
+    questionStyle === "source"
+      ? text
+          .trim()
+          .replace(
+            /\s*(?:%|per\s+(?:user|seat|person)(?:\s*(?:\/|per)\s*(?:month|year))?|(?:\/|per)\s*(?:month|year))$/i,
+            "",
+          )
+      : text;
+  const value = source
     .trim()
     .replace(/^[$€£]\s*/, "")
     .replace(/\s*[$€£]$/, "");
@@ -91,6 +111,7 @@ export async function extractWithDecider({
   systemPrompt,
   progress,
   recordUsage,
+  questionStyle = "exact",
 }: {
   params: StagehandExtractParams;
   page: Pick<Page, "captureSnapshot">;
@@ -98,6 +119,7 @@ export async function extractWithDecider({
   systemPrompt: string;
   progress: Progress;
   recordUsage?: (usage: StagehandResultUsage) => void;
+  questionStyle?: "exact" | "source";
 }): Promise<ExtractResult> {
   const { options, instruction } = params;
   if (options?.screenshot) throw new TypeError("Decider locate requires a text snapshot");
@@ -110,7 +132,7 @@ export async function extractWithDecider({
     throw new TypeError("Decider locate requires between 1 and 128 fields");
   }
   const task = [systemPrompt, root.description, instruction].filter(Boolean).join("\n");
-  const fields = entries.map(([name, node]) => compileField(node, name, task));
+  const fields = entries.map(([name, node]) => compileField(node, name, task, questionStyle));
   const questions = Object.fromEntries(
     fields.map(({ name, instructions }) => [name, { type: "locate", instructions }]),
   );
@@ -151,7 +173,7 @@ export async function extractWithDecider({
         ? spans.toSorted((a, b) => a.start - b.start)
         : spans.toSorted((a, b) => b.score - a.score);
       const candidates = ordered.flatMap(({ text }) => {
-        const value = type === "string" ? text.trim() : parseNumber(text);
+        const value = type === "string" ? text.trim() : parseNumber(text, questionStyle);
         return value === undefined || (type === "integer" && !Number.isInteger(value))
           ? []
           : [value];

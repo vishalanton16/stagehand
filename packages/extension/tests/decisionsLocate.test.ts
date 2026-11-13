@@ -79,3 +79,52 @@ it.each(["pplx-decider-latest", "pplx-decider-flash-latest"] as const)(
     });
   },
 );
+
+it("converts a single numeric source span without guessing among multiple amounts", async () => {
+  const state = "Basic: $10 per user/month. Business: $16 per user/month.";
+  const fetch = vi.fn(async (_url: string, _init: RequestInit) =>
+    Response.json({
+      answers: {
+        price: {
+          type: "locate",
+          spans: [
+            {
+              start: 7,
+              end: 54,
+              text: "$10 per user/month. Business: $16 per user/month",
+              score: 0.99,
+            },
+            { start: 7, end: 25, text: "$10 per user/month", score: 0.95 },
+          ],
+        },
+      },
+      usage: { input_tokens: 70, output_tokens: 1 },
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const params = StagehandExtractParamsSchema.parse({
+    pageId: "page",
+    instruction: "Find the Basic and Business prices",
+    schema: z.toJSONSchema(z.object({ price: z.number().describe("the Basic monthly price") })),
+  });
+  const result = await runWithProgress({ name: "extract", timeout: 0 }, (progress) =>
+    extractWithDecider({
+      params,
+      model: { modelName: "pplx-decider-flash-latest", apiKey: "test-key" },
+      progress,
+      systemPrompt: "",
+      questionStyle: "source",
+      page: {
+        captureSnapshot: async () => ({
+          combinedTree: state,
+          combinedXpathMap: {},
+          combinedUrlMap: {},
+        }),
+      },
+    }),
+  );
+  expect(result.data).toEqual({ price: 10 });
+  expect(JSON.parse(fetch.mock.calls[0]![1].body as string).questions.price.instructions).toBe(
+    "Find the source span for the Basic monthly price.",
+  );
+});
