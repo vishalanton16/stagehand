@@ -146,9 +146,13 @@ The schema-aware ranker improved offline evidence retrieval, but increased fallb
 | Experiment               | Result                                                                                                                    | Status                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | Six-provider group probe | Jev 1.14.0 served the pinned requests. With the correct groups removed, models abstained on 1–6 of 12 tasks.              | Preserve explicit abstention and test it independently.   |
-| Single choice            | Passed 70/70 regression runs. On five fresh pages it wrongly accepted both GitHub qualifier runs.                         | Replay only.                                              |
-| Retry after abstention   | Recovered all four Kubernetes and WebAssembly runs. Targeted median fell from 4.64 s to 2.35 s with effectively flat p95. | Replay only pending fresh negatives and live comparison.  |
+| Single choice            | Passed 70/70 regression runs. On five fresh pages it wrongly accepted both GitHub qualifier runs.                         | Archived.                                                 |
+| Retry after abstention   | Recovered all four Kubernetes and WebAssembly runs. Targeted median fell from 4.64 s to 2.35 s with effectively flat p95. | Replay only pending the fresh live comparison.            |
 | Bounded scalar readers   | Clairic 8/8, both Locate models 7/8 on exact copy. Every returned text offset matched.                                    | Test real-page scalar provenance and typed normalization. |
 | List copy                | Preserves unspaced colons in values. GitHub's inline whitespace issue remains in the snapshot.                            | Covered by a regression test.                             |
 
 See [provider sources, results, and archive IDs](./DECISION_PRIMITIVES.md).
+
+The first [missing-evidence probe](./DECISION_PRIMITIVES.md#missing-evidence-check) found four wrong initial group picks and two more after retry across 30 negative runs. Field mapping caught both retry errors. Both Python docs errors passed runtime validation as incomplete lists. The retry recovered all four positive controls. The roadmap now calls for a source-coverage check before live promotion.
+
+The [source-coverage follow-up](./DECISION_PRIMITIVES.md#source-coverage-check) removed both incomplete Python results from the direct path. It preserved all four retry-only controls in the full probe. Both arms passed the 37-task paired replay with four fallbacks each. The coverage check remains a replay arm pending a fresh live comparison.

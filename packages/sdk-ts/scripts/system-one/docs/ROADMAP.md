@@ -4,7 +4,9 @@ Phased path from the current experiment to something Stagehand can ship. Each ph
 
 ## Current decisions
 
-The experimental SDK keeps the dual group gate and one Luna fallback. A wider initial shortlist and a choice-only gate stay in replay. The next candidate for the SDK is retrieval after abstention, gated on missing-evidence tests, a fresh live comparison, and acceptable fallback p95. Exact DOM text and bounded scalar readers have separate experiments and promotion criteria. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
+The experimental SDK keeps the dual group gate and one Luna fallback. The wider initial shortlist and choice-only variants are archived. The next candidate for the SDK is retrieval after abstention, gated on missing-evidence tests, a fresh live comparison, and acceptable fallback p95. Exact DOM text and bounded scalar readers have separate experiments and promotion criteria. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
+
+The first missing-evidence replay found wrong group picks before and after retry. The source-coverage follow-up caught the incomplete Python documentation list and preserved the positive retry controls. The next gate is a fresh live comparison that includes successful retries and Luna fallbacks.
 
 ## Phase 0 — Stabilize the production path (now)
 

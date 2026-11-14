@@ -444,11 +444,9 @@ export function listGroupRanks(input: {
 
 export type ListGroupExperiment =
   | "schema"
-  | "choice"
-  | "rich-choice"
-  | "diverse-shortlist"
   | "retry-shortlist"
-  | "selected-predicate"
+  | "source-coverage"
+  | { retryGroupProbe: { omit: string[]; sourceCoverage?: boolean } }
   | { oracleGroup: string };
 
 function describeGroup(view: DataView, group: Group): string {
@@ -584,16 +582,10 @@ async function chooseListGroup(
   groups: Group[],
   trace: TraceEntry[],
   stopOnDisagreement: boolean,
-  gate: "dual" | "choice" | "rich-choice" | "selected-predicate",
 ): Promise<Group | undefined> {
   const groupStarted = performance.now();
-  const choiceOnly = gate === "choice" || gate === "rich-choice";
-  const questions = listGroupQuestions(view, list, instruction, groups, gate === "rich-choice");
-  const first = await ask(
-    config,
-    { task: instruction },
-    choiceOnly ? { group: questions.group! } : questions,
-  );
+  const questions = listGroupQuestions(view, list, instruction, groups);
+  const first = await ask(config, { task: instruction }, questions);
   trace.push({
     step: `${list.name}:group-ms`,
     choice: "group",
@@ -602,7 +594,6 @@ async function chooseListGroup(
   });
   const picked = choiceOf(first.answers, "group", trace, `${list.name}:group`, groups.length + 1);
   const group = groups.find((candidate) => candidate.id === picked.choice);
-  if (choiceOnly) return group;
   const pointwise = groups.map((candidate) => ({
     id: candidate.id,
     yes: noulOf(first.answers, `is_${candidate.id}`),
@@ -614,11 +605,7 @@ async function chooseListGroup(
     confidence: best?.yes ?? 0,
     options: groups.length,
   });
-  const rejected =
-    gate === "selected-predicate"
-      ? group && noulOf(first.answers, `is_${group.id}`) < 0.5
-      : gate === "dual" && best && group && (best.id !== group.id || best.yes < 0.5);
-  if (rejected) {
+  if (group && best && (best.id !== group.id || best.yes < 0.5)) {
     const reason = `group-disagree:${list.name}`;
     problem(trace, reason);
     if (stopOnDisagreement) throw new Error(reason);
@@ -667,18 +654,63 @@ export function listGroupProbe(
     omit = [],
     reverse = false,
     richer = false,
-  }: { omit?: string[]; reverse?: boolean; richer?: boolean } = {},
+    shortlist = "baseline",
+  }: {
+    omit?: string[];
+    reverse?: boolean;
+    richer?: boolean;
+    shortlist?: "baseline" | "supplementary";
+  } = {},
 ) {
   const view = buildDataView(input.tree, input.urlMap);
   return plan(input.schema).lists.map((list) => {
-    const groups = rankGroups(view, list, input.instruction).filter(
-      (group) => !omit.includes(group.id),
-    );
+    const baseline = rankGroups(view, list, input.instruction);
+    const groups = (
+      shortlist === "supplementary"
+        ? supplementaryGroups(view, list, input.instruction, baseline)
+        : baseline
+    ).filter((group) => !omit.includes(group.id));
     if (reverse) groups.reverse();
     return groups.length
       ? listGroupQuestions(view, list, input.instruction, groups, richer)
       : undefined;
   });
+}
+
+function supplementaryGroups(
+  view: DataView,
+  list: ListPlan,
+  instruction: string,
+  baseline: Group[],
+) {
+  return schemaRankGroups(view, list, instruction)
+    .slice(0, 4)
+    .filter((candidate) => !baseline.includes(candidate));
+}
+
+function competingListSource(
+  view: DataView,
+  list: ListPlan,
+  instruction: string,
+  selected: Group,
+): Group | undefined {
+  const task = ` ${[...tokens(instruction)].join(" ")} `;
+  const matchesScope = (group: Group) =>
+    [group.context[0] ?? "", ...group.sections].some((label) => {
+      const terms = [...tokens(label)];
+      return terms.length >= 2 && task.includes(` ${terms.join(" ")} `);
+    });
+  if (matchesScope(selected)) return undefined;
+  const selectedRows = new Set(selected.records.map((record) => record.index));
+  const needsLinks = list.fields.some((field) => field.type === "url" && field.required);
+  return view.groups.find(
+    (group) =>
+      group.role === selected.role &&
+      group.records.length > selected.records.length &&
+      !group.records.some((record) => selectedRows.has(record.index)) &&
+      (!needsLinks || group.slots.some((slot) => slot.link && slot.coverage >= 0.5)) &&
+      matchesScope(group),
+  );
 }
 
 async function readList(
@@ -691,15 +723,22 @@ async function readList(
   groupExperiment: ListGroupExperiment | undefined,
   stopOnDisagreement: boolean,
 ): Promise<unknown[] | undefined> {
+  const retryProbe =
+    typeof groupExperiment === "object" && "retryGroupProbe" in groupExperiment
+      ? groupExperiment.retryGroupProbe
+      : undefined;
+  const oracle =
+    typeof groupExperiment === "object" && "oracleGroup" in groupExperiment
+      ? groupExperiment.oracleGroup
+      : undefined;
   const groups =
     groupExperiment === "schema"
       ? schemaRankGroups(view, list, instruction).slice(0, 8)
       : rankGroups(view, list, instruction);
-  const supplementaryGroups = () =>
-    schemaRankGroups(view, list, instruction)
-      .slice(0, 4)
-      .filter((candidate) => !groups.includes(candidate));
-  if (groups.length === 0 && typeof groupExperiment !== "object") return undefined;
+  const firstGroups = retryProbe
+    ? groups.filter((candidate) => !retryProbe.omit.includes(candidate.id))
+    : groups;
+  if (firstGroups.length === 0 && !oracle) return undefined;
   const candidate = groups[0]!;
   const speculative =
     speculateListMapping && candidate && typeof groupExperiment !== "object"
@@ -713,25 +752,24 @@ async function readList(
       : undefined;
   // The group answer can reject this candidate. Observe its failure immediately.
   void speculative?.response.catch(() => {});
-  let group =
-    typeof groupExperiment === "object"
-      ? view.groups.find((candidate) => candidate.id === groupExperiment.oracleGroup)
-      : await chooseListGroup(
-          config,
-          view,
-          list,
-          instruction,
-          groupExperiment === "diverse-shortlist" ? [...groups, ...supplementaryGroups()] : groups,
-          trace,
-          stopOnDisagreement,
-          groupExperiment === "choice" ||
-            groupExperiment === "rich-choice" ||
-            groupExperiment === "selected-predicate"
-            ? groupExperiment
-            : "dual",
-        );
-  if (!group && groupExperiment === "retry-shortlist") {
-    const supplementary = supplementaryGroups();
+  let group = oracle
+    ? view.groups.find((candidate) => candidate.id === oracle)
+    : await chooseListGroup(
+        config,
+        view,
+        list,
+        instruction,
+        firstGroups,
+        trace,
+        stopOnDisagreement,
+      );
+  if (
+    !group &&
+    (groupExperiment === "retry-shortlist" || groupExperiment === "source-coverage" || retryProbe)
+  ) {
+    const supplementary = supplementaryGroups(view, list, instruction, groups).filter(
+      (candidate) => !retryProbe?.omit.includes(candidate.id),
+    );
     if (supplementary.length) {
       group = await chooseListGroup(
         config,
@@ -741,11 +779,18 @@ async function readList(
         supplementary,
         trace,
         stopOnDisagreement,
-        "dual",
       );
     }
   }
   if (!group) return undefined;
+  if (groupExperiment === "source-coverage" || retryProbe?.sourceCoverage) {
+    const competing = competingListSource(view, list, instruction, group);
+    if (competing) {
+      const reason = `competing-source:${list.name}:${group.id}:${competing.id}`;
+      problem(trace, reason);
+      if (stopOnDisagreement) throw new Error(reason);
+    }
+  }
   trace.push({
     step: `${list.name}:page-items`,
     choice: String(group.records.length),

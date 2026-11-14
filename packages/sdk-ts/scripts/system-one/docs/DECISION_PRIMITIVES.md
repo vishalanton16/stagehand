@@ -89,7 +89,7 @@ The first variant appended up to four new candidates from the schema-aware ranke
 | Retry targeted median / p95               |             4.64 / 11.08 s |            2.35 / 11.23 s |
 | Retry targeted estimated USD / 1k         |                     $0.414 |                    $0.274 |
 
-Both approaches recovered all four Kubernetes and WebAssembly answers directly. The appended version caused additional fallbacks on MDN and lost one RockAuto fallback result in the broader replay. No direct accepts failed in these comparisons. The retry result is a targeted development result. A new set should include sources that are absent from both shortlists. This will measure the extra round trip and catch bad accepts when the first abstention was correct. Keep both variants in replay.
+Both approaches recovered all four Kubernetes and WebAssembly answers directly. The appended version caused additional fallbacks on MDN and lost one RockAuto fallback result in the broader replay. No direct accepts failed in these comparisons. The retry result is a targeted development result. A new set should include sources that are absent from both shortlists. This will measure the extra round trip and catch bad accepts when the first abstention was correct. The appended variant is archived. The retry remains available for the live comparison.
 
 Archives: appended targeted `9df8152c-6cea-4177-8e86-8ccda4843b3f`, appended full regression `03a98a4e-3e67-4bee-a438-7e0f620a30c8`, retry `34635cef-ea8c-4650-ba4e-d74ce206f36f`.
 
@@ -108,3 +108,45 @@ REPLAY_TASKS=hold7_kubernetes_pod_phases,hold7_wasm_number_types REPLAY_ARMS=run
 Measure evidence availability before tuning acceptance. If the right scope was omitted, recover it from a different retrieval source. If the right scope was present and the mapping fails, inspect the requested fields, slots, and copy transformations. If the accessibility snapshot lost exact text, improve capture or read the matched DOM node. A repeated model judgment cannot restore text missing from its input.
 
 For longer lists, select a structured group or an explicit scope, then copy rows by source identity and validate coverage. For bounded scalar evidence, compare Locate and Clairic as readers using span-aware scoring and field-specific normalization. Evaluate the generated answer and the evidence separately. Measure one model plus Luna fallback end to end and keep the direct and fallback timing distributions visible.
+
+## Missing-evidence check
+
+After commit `3c66383e3`, pinned Decider v1.3 ran 15 missing-evidence cases and two retry-only controls twice. The missing cases removed groups matching the labeled source boundaries and row count from both shortlists. The controls retained the supplemental Kubernetes and WebAssembly groups. The probe uses the current dual gate, and only retries when the initial choice abstains. The first run completed every request.
+
+| Selection probe                                        | Result                                |
+| ------------------------------------------------------ | ------------------------------------- |
+| Missing evidence, wrong accepts in the first shortlist | 4/30 across two tasks                 |
+| Missing evidence, additional wrong accepts from retry  | 2/30, both on curl                    |
+| Controls with the correct group only in the retry      | 4/4 recovered and extracted correctly |
+
+With the correct labels removed, curl's first shortlist abstained. The retry selected the prose section containing labels and explanations, at 0.970 choice confidence and 0.764 predicate score. Full extraction with fallback disabled refused both because there was no usable field mapping. The Python docs selection returned six project-information links and passed the runtime checks even though the task asked for the documentation sections. Both x-rates selections failed schema validation. These are deliberately altered shortlists on known snapshots. They do not estimate the frequency of these errors on live pages.
+
+Keep the retry in replay. The next isolated test should compare the existing acceptance rule against a source-coverage requirement that can distinguish a partial group from the requested list. Cross-check it against the four successful retry-only controls and the known list regression.
+
+Archives under `runs/group-probes/`: selection `d464dd97-2841-4ea8-a646-1034133096f0`, retry accepts through extraction `f093686d-6817-4cb7-b8e1-b52d45e0fb11`, targeted extraction of all erroneous picks `d9b16f4b-a32a-4beb-91c6-ada348d22f7e`.
+
+```sh
+GROUP_PROBE_EXTRACT=1 node --env-file=.env --import tsx packages/sdk-ts/scripts/system-one/shortlistAbstentionProbe.ts
+```
+
+## Source-coverage check
+
+The replay arm checks whether the snapshot contains a larger, disjoint group of the same record role with a label that matches the task's wording. It checks link coverage for required URL fields. If the selected group lacks a matching label, the arm abstains before mapping. The check inspects all generated groups, including groups deliberately excluded from the decision model's shortlists. It adds no model request and leaves the SDK default on the existing gate.
+
+| Comparison                                                          |    Retry alone | Retry with source coverage |
+| ------------------------------------------------------------------- | -------------: | -------------------------: |
+| Wrong direct extractions when both shortlists lack a matching group |           2/30 |                       0/30 |
+| Retry-only controls recovered directly                              |            4/4 |                        4/4 |
+| Known-list replay, including two retry controls                     |          37/37 |                      37/37 |
+| Fallbacks in that replay                                            |              4 |                          4 |
+| Replay p50 / p95                                                    | 1.10 / 10.51 s |              1.16 / 9.84 s |
+
+The check caught both Python docs partial lists. The existing mapping and schema checks caught the curl and exchange-rate selections. The selection probe still recorded six wrong group picks. The baseline missing-evidence count combines the original selection run with targeted extraction replays of accepted groups. The coverage arm repeated selection and extraction under the same omission rules. An earlier targeted run recovered three of four controls because one Kubernetes selection disagreed before retry. The broader negative run recovered four of four. These snapshots informed the rule and measure regression behavior. The check needs an independent live test, especially instructions that mention several sections or paraphrase a heading.
+
+Archives: broad probe `runs/group-probes/cca75b5c-5886-4471-9bba-558a6b8fb059/`, focused controls `runs/group-probes/3c66febf-f270-4dc6-8baa-62a9562cd5dc/`, paired replay `runs/archive/7e80d0a0-49bb-48a9-ae3d-3a1235013028/`.
+
+```sh
+GROUP_PROBE_EXTRACT=1 GROUP_PROBE_SOURCE_COVERAGE=1 node --env-file=.env --import tsx packages/sdk-ts/scripts/system-one/shortlistAbstentionProbe.ts
+```
+
+The choice-only, rich-choice, wider initial shortlist, and selected-predicate extraction arms were removed after their comparisons. The replay archives retain source and results. The provider group probe still uses choice questions to measure ranking and abstention in isolation.
