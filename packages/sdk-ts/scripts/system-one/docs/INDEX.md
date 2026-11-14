@@ -2,15 +2,16 @@
 
 Status and handoff for experimental System One extraction (`extract: "map"`). The runtime uses one decision model with an LLM fallback.
 
-| Doc                                            | Purpose                                                                      |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| [REVIEW.md](./REVIEW.md)                       | Review of the **uncommitted** production wiring on top of commit `632789220` |
-| [NEXT_STEPS.md](./NEXT_STEPS.md)               | Ordered engineering tasks with done conditions                               |
-| [EVALUATION.md](./EVALUATION.md)               | How to measure fairly (held-outs, metrics, what not to claim)                |
-| [ARCHITECTURE.md](./ARCHITECTURE.md)           | How the pipeline works and where the code lives                              |
-| [ROADMAP.md](./ROADMAP.md)                     | Product phases from experiment → default                                     |
-| [DIRECTIONS.md](./DIRECTIONS.md)               | Alternatives and experiments that are deliberately _not_ the product default |
-| [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md) | Provider research and the next evidence-ranking experiment                   |
+| Doc                                                | Purpose                                                                      |
+| -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [REVIEW.md](./REVIEW.md)                           | Review of the **uncommitted** production wiring on top of commit `632789220` |
+| [NEXT_STEPS.md](./NEXT_STEPS.md)                   | Ordered engineering tasks with done conditions                               |
+| [EVALUATION.md](./EVALUATION.md)                   | How to measure fairly (held-outs, metrics, what not to claim)                |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)               | How the pipeline works and where the code lives                              |
+| [ROADMAP.md](./ROADMAP.md)                         | Product phases from experiment → default                                     |
+| [DIRECTIONS.md](./DIRECTIONS.md)                   | Alternatives and experiments that are deliberately _not_ the product default |
+| [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md)     | Provider research and the next evidence-ranking experiment                   |
+| [DECISION_PRIMITIVES.md](./DECISION_PRIMITIVES.md) | Provider contracts, abstention experiments, and scalar span results          |
 
 Also read:
 
@@ -139,3 +140,15 @@ The earlier three-page live check had end-to-end p95 of 10.86 s for Decider and 
 ### Candidate ranking and source mapping
 
 The schema-aware ranker improved offline evidence retrieval, but increased fallback in the paired replay. Keep it in the replay harness. The single-request fit check also increased latency and was removed. The source-mapping changes from the oracle experiment are in the SDK path. PostgreSQL's nested chapter now passes directly on frozen replay. See [audit and trial results](./PROVIDER_RESEARCH.md#evidence-ranking-and-one-request-trials).
+
+### Decision primitives and evidence recovery
+
+| Experiment               | Result                                                                                                                    | Status                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Six-provider group probe | Jev 1.14.0 served the pinned requests. With the correct groups removed, models abstained on 1–6 of 12 tasks.              | Preserve explicit abstention and test it independently.   |
+| Single choice            | Passed 70/70 regression runs. On five fresh pages it wrongly accepted both GitHub qualifier runs.                         | Replay only.                                              |
+| Retry after abstention   | Recovered all four Kubernetes and WebAssembly runs. Targeted median fell from 4.64 s to 2.35 s with effectively flat p95. | Replay only pending fresh negatives and live comparison.  |
+| Bounded scalar readers   | Clairic 8/8, both Locate models 7/8 on exact copy. Every returned text offset matched.                                    | Test real-page scalar provenance and typed normalization. |
+| List copy                | Preserves unspaced colons in values. GitHub's inline whitespace issue remains in the snapshot.                            | Covered by a regression test.                             |
+
+See [provider sources, results, and archive IDs](./DECISION_PRIMITIVES.md).

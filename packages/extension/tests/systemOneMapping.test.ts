@@ -53,6 +53,39 @@ describe("System One missing values", () => {
 });
 
 describe("System One composite labels", () => {
+  it("keeps an unspaced colon in a copied list value", async () => {
+    vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => ({
+      model: "test",
+      answers: Object.fromEntries(
+        Object.entries(questions).map(([key, question]) => {
+          if (question.type === "noul")
+            return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
+          const choice = Object.keys(question.criteria)[0]!;
+          return [
+            key,
+            { type: "choice" as const, choice, probabilities: { [choice]: 1 }, confidence: 1 },
+          ];
+        }),
+      ),
+      usage: { inputTokens: 1, outputTokens: 1 },
+      durationMs: 1,
+    }));
+    const result = await mapCopyExtract(
+      { apiKey: "test" },
+      {
+        instruction: "Copy all identifiers.",
+        schema: {
+          type: "object",
+          required: ["items"],
+          properties: { items: { type: "array", items: { type: "string" } } },
+        },
+        tree: "[1] list\n  [2] listitem: kind:alpha\n  [3] listitem: kind:beta\n  [4] listitem: ID: gamma",
+        urlMap: {},
+      },
+    );
+    expect(result.data).toEqual({ items: ["kind:alpha", "kind:beta", "gamma"] });
+  });
+
   it("can copy the title without a dotted section number in a scalar list", async () => {
     vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => ({
       model: "test",

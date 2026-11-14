@@ -9,6 +9,7 @@ import { heldout3Tasks } from "./heldout3.js";
 import { heldout4Tasks } from "./heldout4.js";
 
 import { heldout5Tasks } from "./heldout5.js";
+import { heldout7Tasks } from "./heldout7.js";
 import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
 
 export const corpusTasks = [
@@ -19,6 +20,7 @@ export const corpusTasks = [
   ...heldout4Tasks,
   ...heldout5Tasks,
   ...heldout6Tasks,
+  ...heldout7Tasks,
   ...confirmationTasks,
 ];
 

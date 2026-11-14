@@ -4,6 +4,15 @@ These tasks are ordered and each is small enough for one PR or one session. Each
 
 Product shape (decided): **one System One model (Decider by default) plus one LLM fallback (Luna).** Two System One models in parallel is an experiment, not the product.
 
+## Current experiment order
+
+Keep the dual group gate in the SDK. Single choice caused two wrong direct accepts on fresh pages. Appending candidates to every request lost one regression result. Keep both variants in replay. Pin the decision model versions in comparisons, including Jev 1.14.0. The [research and archives](./DECISION_PRIMITIVES.md) record the evidence behind these decisions.
+
+1. **Test retrieval after abstention.** Compare the original shortlist with a retry that adds previously unseen groups. Include a control where only the retry contains the right group and a negative where neither shortlist contains it. Count wrong group accepts separately from wrong extraction results. Treat an added wrong accept as a blocker for promotion.
+2. **Measure the retry through the live SDK.** After the missing-evidence check, use fresh pages that exercise direct acceptance, successful retry, and retry followed by Luna. Rotate arm order and report direct, retry, and fallback latency and provider usage. Keep the retry experimental until correctness and p95 hold on fresh data.
+3. **Preserve exact list text.** Test rendered inline adjacency against the captured accessibility text and the matched DOM node. Start with the GitHub qualifier case and add punctuation and whitespace controls. Verify the full value, including its prefix and slash.
+4. **Compare bounded scalar readers.** Freeze real-page evidence and test copy, Locate, and Clairic separately. Score field presence, source span, and typed normalization, including explicit zero and inferred values. Record Clairic passes and billed tokens.
+
 ## 1. Regression run on the seen sets
 
 The production pipeline (`runtime-decider`) has never been run on dev, held1, held2 or held3 since its behaviour changed (see `REVIEW.md`, H1).

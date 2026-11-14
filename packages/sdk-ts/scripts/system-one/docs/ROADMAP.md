@@ -2,6 +2,10 @@
 
 Phased path from the current experiment to something Stagehand can ship. Each phase has an exit criterion. Engineering detail lives in [NEXT_STEPS.md](./NEXT_STEPS.md); measurement rules in [EVALUATION.md](./EVALUATION.md).
 
+## Current decisions
+
+The experimental SDK keeps the dual group gate and one Luna fallback. A wider initial shortlist and a choice-only gate stay in replay. The next candidate for the SDK is retrieval after abstention, gated on missing-evidence tests, a fresh live comparison, and acceptable fallback p95. Exact DOM text and bounded scalar readers have separate experiments and promotion criteria. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
+
 ## Phase 0 — Stabilize the production path (now)
 
 **Goal:** `extract: "map"` is correct, measurable and reviewable.

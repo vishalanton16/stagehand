@@ -2,7 +2,7 @@ import * as extractService from "../../../extension/services/extractService.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 import { env } from "node:process";
 import { z } from "zod/v4";
-import { mapCopyExtract, type ScalarReader } from "./mapCopy.js";
+import { mapCopyExtract, type ListGroupExperiment, type ScalarReader } from "./mapCopy.js";
 import { groupLabels } from "./groupLabels.js";
 import {
   cost,
@@ -281,7 +281,7 @@ function runtimeMap(
     experiment,
   }: {
     speculateListMapping?: boolean;
-    experiment?: "baseline" | "schema" | "oracle";
+    experiment?: "baseline" | "oracle" | Extract<ListGroupExperiment, string>;
   } = {},
 ): Arm {
   return {
@@ -295,9 +295,14 @@ function runtimeMap(
         cachedInputTokens: 0,
       };
       const llmUsage: Usage = { ...decisionUsage };
-      const oracleGroup = groupLabels[context.task.name]?.oracle;
-      if (experiment === "oracle" && !oracleGroup)
-        throw new Error(`Missing oracle group for ${context.task.name}`);
+      let groupExperiment: ListGroupExperiment | undefined;
+      if (experiment === "oracle") {
+        const oracleGroup = groupLabels[context.task.name]?.oracle;
+        if (!oracleGroup) throw new Error(`Missing oracle group for ${context.task.name}`);
+        groupExperiment = { oracleGroup };
+      } else if (experiment !== "baseline") {
+        groupExperiment = experiment;
+      }
       const result = await extractService.extract({
         params: {
           pageId: "replay",
@@ -338,12 +343,7 @@ function runtimeMap(
         },
         logger: context.logger,
         speculateListMapping,
-        groupExperiment:
-          experiment === "oracle" && oracleGroup
-            ? { oracleGroup }
-            : experiment === "schema"
-              ? experiment
-              : undefined,
+        groupExperiment,
       });
       Object.assign(context.usage, {
         inputTokens: result.metadata.usage.inputTokens,
@@ -373,6 +373,17 @@ export const extraArms: Record<string, Arm> = {
   "runtime-decider-speculative": runtimeMap("decider", { speculateListMapping: true }),
   "runtime-flash": runtimeMap("flash"),
   "runtime-decider-v13": runtimeMap("decider", { experiment: "baseline" }),
+  "runtime-decider-v13-choice": runtimeMap("decider", { experiment: "choice" }),
+  "runtime-decider-v13-rich-choice": runtimeMap("decider", { experiment: "rich-choice" }),
+  "runtime-decider-v13-diverse-shortlist": runtimeMap("decider", {
+    experiment: "diverse-shortlist",
+  }),
+  "runtime-decider-v13-retry-shortlist": runtimeMap("decider", {
+    experiment: "retry-shortlist",
+  }),
+  "runtime-decider-v13-selected-predicate": runtimeMap("decider", {
+    experiment: "selected-predicate",
+  }),
   "runtime-decider-v13-schema": runtimeMap("decider", {
     experiment: "schema",
     speculateListMapping: true,

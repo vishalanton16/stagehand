@@ -287,12 +287,13 @@ function convert(
   view: DataView,
   node: OutlineNode | undefined,
   field: Field,
+  fromList = false,
 ): string | number | undefined {
   if (!node) return undefined;
   if (field.type === "url") return urlFor(view, node);
   if (field.type === "number" || field.type === "integer")
     return parseNumber(node.name, tokens(fieldText(field)));
-  return stripLabel(node.name.replace(/\s+/g, " ").trim(), field);
+  return stripLabel(node.name.replace(/\s+/g, " ").trim(), field, fromList);
 }
 
 function rankGroups(view: DataView, list: ListPlan, instruction: string): Group[] {
@@ -441,7 +442,14 @@ export function listGroupRanks(input: {
   }));
 }
 
-export type ListGroupExperiment = "schema" | { oracleGroup: string };
+export type ListGroupExperiment =
+  | "schema"
+  | "choice"
+  | "rich-choice"
+  | "diverse-shortlist"
+  | "retry-shortlist"
+  | "selected-predicate"
+  | { oracleGroup: string };
 
 function describeGroup(view: DataView, group: Group): string {
   const where = group.sections.length
@@ -576,34 +584,15 @@ async function chooseListGroup(
   groups: Group[],
   trace: TraceEntry[],
   stopOnDisagreement: boolean,
+  gate: "dual" | "choice" | "rich-choice" | "selected-predicate",
 ): Promise<Group | undefined> {
   const groupStarted = performance.now();
-  const want = list.fields.map(fieldText).join(", ");
-  const listName = list.name.replaceAll("_", " ");
-  // The same choice asked a second way: each group on its own, as a yes/no
-  // question the model answers in isolation from the multiple choice.
+  const choiceOnly = gate === "choice" || gate === "rich-choice";
+  const questions = listGroupQuestions(view, list, instruction, groups, gate === "rich-choice");
   const first = await ask(
     config,
     { task: instruction },
-    {
-      group: {
-        type: "choice",
-        instructions: `Task: ${instruction}\nWhich group of repeated page items is the "${listName}" list? Each item must provide: ${want}.`,
-        criteria: {
-          ...Object.fromEntries(groups.map((group) => [group.id, describeGroup(view, group)])),
-          [NONE]: "None of these groups",
-        },
-      },
-      ...Object.fromEntries(
-        groups.map((group) => [
-          `is_${group.id}`,
-          {
-            type: "noul",
-            instructions: `Task: ${instruction}\nAre these repeated page items the "${listName}" list (each item provides: ${want})? ${describeGroup(view, group)}`,
-          } satisfies DecisionQuestion,
-        ]),
-      ),
-    },
+    choiceOnly ? { group: questions.group! } : questions,
   );
   trace.push({
     step: `${list.name}:group-ms`,
@@ -613,6 +602,7 @@ async function chooseListGroup(
   });
   const picked = choiceOf(first.answers, "group", trace, `${list.name}:group`, groups.length + 1);
   const group = groups.find((candidate) => candidate.id === picked.choice);
+  if (choiceOnly) return group;
   const pointwise = groups.map((candidate) => ({
     id: candidate.id,
     yes: noulOf(first.answers, `is_${candidate.id}`),
@@ -624,12 +614,71 @@ async function chooseListGroup(
     confidence: best?.yes ?? 0,
     options: groups.length,
   });
-  if (group && best && (best.id !== group.id || best.yes < 0.5)) {
+  const rejected =
+    gate === "selected-predicate"
+      ? group && noulOf(first.answers, `is_${group.id}`) < 0.5
+      : gate === "dual" && best && group && (best.id !== group.id || best.yes < 0.5);
+  if (rejected) {
     const reason = `group-disagree:${list.name}`;
     problem(trace, reason);
     if (stopOnDisagreement) throw new Error(reason);
   }
   return group;
+}
+
+function listGroupQuestions(
+  view: DataView,
+  list: ListPlan,
+  instruction: string,
+  groups: Group[],
+  richer = false,
+) {
+  const want = list.fields.map(fieldText).join(", ");
+  const listName = list.name.replaceAll("_", " ");
+  const descriptions = groups.map((group) => {
+    const description = describeGroup(view, group);
+    if (!richer) return [group.id, description] as const;
+    const labels = groupSourceLabels(view, group).filter(Boolean);
+    const fields = [...new Set(group.slots.flatMap((slot) => (slot.label ? [slot.label] : [])))];
+    return [
+      group.id,
+      `${description} Source labels: ${clip(labels.join(" | "), 140)}. Columns: ${clip(fields.join(" | "), 120)}.`,
+    ] as const;
+  });
+  const questions: Record<string, DecisionQuestion> = {
+    group: {
+      type: "choice",
+      instructions: `Task: ${instruction}\nWhich group of repeated page items is the "${listName}" list? Each item must provide: ${want}.`,
+      criteria: { ...Object.fromEntries(descriptions), [NONE]: "None of these groups" },
+    },
+  };
+  for (const [id, description] of descriptions) {
+    questions[`is_${id}`] = {
+      type: "noul",
+      instructions: `Task: ${instruction}\nAre these repeated page items the "${listName}" list (each item provides: ${want})? ${description}`,
+    };
+  }
+  return questions;
+}
+
+export function listGroupProbe(
+  input: { schema: JsonSchema; instruction: string; tree: string; urlMap: Record<string, string> },
+  {
+    omit = [],
+    reverse = false,
+    richer = false,
+  }: { omit?: string[]; reverse?: boolean; richer?: boolean } = {},
+) {
+  const view = buildDataView(input.tree, input.urlMap);
+  return plan(input.schema).lists.map((list) => {
+    const groups = rankGroups(view, list, input.instruction).filter(
+      (group) => !omit.includes(group.id),
+    );
+    if (reverse) groups.reverse();
+    return groups.length
+      ? listGroupQuestions(view, list, input.instruction, groups, richer)
+      : undefined;
+  });
 }
 
 async function readList(
@@ -646,6 +695,10 @@ async function readList(
     groupExperiment === "schema"
       ? schemaRankGroups(view, list, instruction).slice(0, 8)
       : rankGroups(view, list, instruction);
+  const supplementaryGroups = () =>
+    schemaRankGroups(view, list, instruction)
+      .slice(0, 4)
+      .filter((candidate) => !groups.includes(candidate));
   if (groups.length === 0 && typeof groupExperiment !== "object") return undefined;
   const candidate = groups[0]!;
   const speculative =
@@ -660,10 +713,38 @@ async function readList(
       : undefined;
   // The group answer can reject this candidate. Observe its failure immediately.
   void speculative?.response.catch(() => {});
-  const group =
+  let group =
     typeof groupExperiment === "object"
       ? view.groups.find((candidate) => candidate.id === groupExperiment.oracleGroup)
-      : await chooseListGroup(config, view, list, instruction, groups, trace, stopOnDisagreement);
+      : await chooseListGroup(
+          config,
+          view,
+          list,
+          instruction,
+          groupExperiment === "diverse-shortlist" ? [...groups, ...supplementaryGroups()] : groups,
+          trace,
+          stopOnDisagreement,
+          groupExperiment === "choice" ||
+            groupExperiment === "rich-choice" ||
+            groupExperiment === "selected-predicate"
+            ? groupExperiment
+            : "dual",
+        );
+  if (!group && groupExperiment === "retry-shortlist") {
+    const supplementary = supplementaryGroups();
+    if (supplementary.length) {
+      group = await chooseListGroup(
+        config,
+        view,
+        list,
+        instruction,
+        supplementary,
+        trace,
+        stopOnDisagreement,
+        "dual",
+      );
+    }
+  }
   if (!group) return undefined;
   trace.push({
     step: `${list.name}:page-items`,
@@ -876,8 +957,8 @@ async function readList(
               ? position.has(field.name)
                 ? (numberCandidates(readSlot(view, record, slot.key)?.name ?? "")[
                     position.get(field.name)!
-                  ]?.value ?? convert(view, readSlot(view, record, slot.key), field))
-                : convert(view, readSlot(view, record, slot.key), field)
+                  ]?.value ?? convert(view, readSlot(view, record, slot.key), field, true))
+                : convert(view, readSlot(view, record, slot.key), field, true)
               : undefined;
       let sourceId = slot ? readSlot(view, record, slot.key)?.id : undefined;
       if (slot && slot.coverage < 0.5 && !list.scalarItems) {
@@ -1034,8 +1115,10 @@ function rankFacts(view: DataView, field: Field, instruction: string): Fact[] {
   return [...picked];
 }
 
-function stripLabel(text: string, field: Field): string {
-  const match = /^([^:]{1,40}):\s*(.+)$/s.exec(text);
+function stripLabel(text: string, field: Field, fromList = false): string {
+  // An unspaced colon in a list value can be part of an identifier.
+  const prefix = fromList ? /^([^:]{1,40}):\s+(.+)$/s : /^([^:]{1,40}):\s*(.+)$/s;
+  const match = prefix.exec(text);
   if (!match) return text;
   const label = match[1]!.trim();
   if (overlap(tokens(label), tokens(fieldText(field))) > 0 || label.split(/\s+/).length <= 3)
