@@ -51,6 +51,7 @@ const SKIP_ROLES = new Set(["rootwebarea", "scrollable, html", "html", "linebrea
 const CONTAINER_ROLES = new Set([
   "row",
   "listitem",
+  "term",
   "article",
   "link",
   "section",
@@ -195,14 +196,38 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
     return "";
   };
 
-  const slotKeys = (records: OutlineNode[]) =>
-    new Set(
+  const slotKeys = new Map<OutlineNode[], Set<string>>();
+  const getSlotKeys = (records: OutlineNode[]) => {
+    const cached = slotKeys.get(records);
+    if (cached) return cached;
+    const keys = new Set(
       records.slice(0, 8).flatMap((record) =>
         descendants(record)
           .filter((node) => node.depth <= record.depth + 2)
           .map((node) => slotKey(record, node)),
       ),
     );
+    slotKeys.set(records, keys);
+    return keys;
+  };
+
+  // Description-list terms are records even when their labels have different markup.
+  // Merge across sibling sections only when those sections share a parent.
+  const descriptionScope = (parent: OutlineNode) => {
+    const section = parent.parent === undefined ? undefined : nodes[parent.parent];
+    return section && /^(region|section)$/.test(lower(section)) ? section.parent : undefined;
+  };
+  const canMerge = (left: (typeof raw)[number], right: (typeof raw)[number]) => {
+    if (left.role !== right.role || lower(left.parent) !== lower(right.parent)) return false;
+    if (left.role === "term" && lower(left.parent) === "descriptionlist") {
+      const scope = descriptionScope(left.parent);
+      return scope !== undefined && scope === descriptionScope(right.parent);
+    }
+    const keys = getSlotKeys(left.records);
+    const otherKeys = getSlotKeys(right.records);
+    const overlap = [...keys].filter((key) => otherKeys.has(key)).length;
+    return overlap / Math.max(keys.size, otherKeys.size) >= 0.6;
+  };
 
   // Merge groups of the same record role and slot shape that sit in different sections.
   const merged: {
@@ -214,26 +239,22 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
   const used = new Set<number>();
   raw.forEach((group, i) => {
     if (used.has(i)) return;
-    const keys = slotKeys(group.records);
     const parts = [group];
     raw.forEach((other, j) => {
-      if (j <= i || used.has(j) || other.role !== group.role) return;
-      if (lower(other.parent) !== lower(group.parent)) return;
-      const otherKeys = slotKeys(other.records);
-      const overlap = [...keys].filter((key) => otherKeys.has(key)).length;
-      if (overlap / Math.max(keys.size, otherKeys.size) >= 0.6) {
+      if (j <= i || used.has(j)) return;
+      if (canMerge(group, other)) {
         parts.push(other);
         used.add(j);
       }
     });
-    if (parts.length > 1) {
+    if (parts.length > 1 || (group.role === "term" && lower(group.parent) === "descriptionlist")) {
       const parents = new Set(parts.map((part) => part.parent.parent));
       for (const single of singles) {
         if (single.role !== group.role || lower(single.parent) !== lower(group.parent)) continue;
-        if (!parents.has(single.parent.parent)) continue;
-        const singleKeys = slotKeys(single.records);
-        const overlap = [...keys].filter((key) => singleKeys.has(key)).length;
-        if (overlap / Math.max(keys.size, singleKeys.size) >= 0.6) parts.push(single);
+        const siblingDescription =
+          group.role === "term" && lower(group.parent) === "descriptionlist";
+        if ((siblingDescription || parents.has(single.parent.parent)) && canMerge(group, single))
+          parts.push(single);
       }
     }
     if (parts.reduce((sum, part) => sum + part.records.length, 0) < 3) return;

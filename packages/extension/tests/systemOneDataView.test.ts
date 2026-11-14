@@ -32,4 +32,44 @@ describe("nested record scopes", () => {
     expect(group?.slots.flatMap((slot) => slot.samples)).not.toContain("old apple");
     expect(group?.slots.every((slot) => slot.coverage >= 0 && slot.coverage <= 1)).toBe(true);
   });
+
+  it("keeps all terms across sibling sections despite differences in label markup", () => {
+    const tree = `[1] RootWebArea
+  [2] main
+    [3] region: Basics
+      [4] heading: Basics
+      [5] DescriptionList
+        [6] term: Open
+        [7] definition: Open an item
+        [8] term: Close
+        [9] definition: Close an item
+    [10] region: Advanced
+      [11] heading: Advanced
+      [12] DescriptionList
+        [13] term: Export
+          [14] link: Export
+        [15] definition: Export an item
+    [16] region: Other
+      [17] heading: Other
+      [18] DescriptionList
+        [19] term: Print
+          [20] code: Print
+        [21] definition: Print an item
+  [22] complementary
+    [23] region: Archive
+      [24] heading: Archive
+      [25] DescriptionList
+        [26] term: Obsolete
+        [27] definition: Old command
+        [28] term: Legacy
+        [29] definition: Old command
+        [30] term: Removed
+        [31] definition: Old command`;
+    const view = buildDataView(tree, {});
+    const group = view.groups.find(
+      (candidate) => candidate.role === "term" && candidate.records[0]?.id === "6",
+    );
+    expect(group?.records.map((record) => record.id)).toEqual(["6", "8", "13", "19"]);
+    expect(group?.sections).toEqual(["Basics", "Advanced", "Other"]);
+  });
 });

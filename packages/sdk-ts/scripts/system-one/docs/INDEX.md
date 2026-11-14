@@ -28,7 +28,7 @@ Also read:
 | 6. Choose cross-check strictness      | Partial | Retained normalized exact comparison for scalars and strict validation of required list fields. Locate returned day fragments for Eiffel Tower dates. A controlled exact-versus-containment comparison remains open. |
 | 7. Run fresh heldout 5                | Done    | Six new sites, two rounds each. Decider and Flash each scored 10/12. Both misses per model came from the same ambiguous temperature page.                                                                            |
 | 8. Measure real pages through the SDK | Done    | Three sites, two rounds each. Decider passed 6/6 with zero fallbacks, and Luna passed 4/6. Decider had higher p50 and p95 latency.                                                                                   |
-| 9. Prepare a reviewable stack         | Pending | Per the workspace request, changes are unstaged at `632789220`. The suggested split is in [NEXT_STEPS.md](./NEXT_STEPS.md#9-split-into-a-reviewable-stack).                                                          |
+| 9. Prepare a reviewable stack         | Pending | The initial implementation is in one local commit, `a9e5b9484`. The follow-up changes are unstaged. The suggested PR split is in [NEXT_STEPS.md](./NEXT_STEPS.md#9-split-into-a-reviewable-stack).                   |
 
 ## Measurements
 
@@ -41,3 +41,13 @@ Also read:
 The MDN task returned 38 of 63 requested status codes and passed the runtime checks both times. The NIST grader required 273.15 K from the prose, and both decision models returned 273 K from the table. The frozen scores preserve that ambiguity. On the real-page subset, Luna returned an empty string for an absent DOI in both RFC runs. The IANA task drove the upper latency tail in fresh replay. [Full results and replay archive IDs](../README.md#plan-validation)
 
 `extract: "map"` remains opt-in. The open release gates are list completeness, fewer round trips without added wrong accepts, a controlled comparison of the scalar checks, and an independent confirmation on another fresh set. The saved runs and detailed comparisons are linked from the [README](../README.md#plan-validation).
+
+### List completeness follow-up
+
+| Targeted replay                                                             | Before                  | After                                         |
+| --------------------------------------------------------------------------- | ----------------------- | --------------------------------------------- |
+| MDN status codes                                                            | 38 of 63 in both rounds | All 63 codes in snapshot order in both rounds |
+| MDN frozen grader                                                           | 0/2, incomplete list    | 0/2, copied the code into the name field      |
+| Craigslist, separate tables, Python documentation links, and mountain names |                         | 8/8, all accepted directly                    |
+
+Description-list terms now group across sibling regions with the same parent even when their label markup differs. The mapper still needs to distinguish a name from the number in a composite label. The targeted replay is archived under `runs/archive/d6f9c44b-c34a-4d99-ab32-62496be6b90f/`. A full seen-set rerun remains pending for this change.
