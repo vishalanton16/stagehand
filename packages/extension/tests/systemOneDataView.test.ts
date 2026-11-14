@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { buildDataView } from "../services/decisions/dataView.js";
 
 describe("nested record scopes", () => {
+  it("uses the enclosing description term as the scope for nested terms", () => {
+    const view = buildDataView(
+      `[1] DescriptionList
+  [2] term: Account settings
+  [3] definition
+    [4] DescriptionList
+      [5] term: Login
+      [6] definition: Login help
+      [7] term: Password
+      [8] definition: Password help
+      [9] term: Profile
+      [10] definition: Profile help`,
+      {},
+    );
+    const group = view.groups.find((candidate) => candidate.records[0]?.id === "5");
+    expect(group?.context).toEqual(Array(3).fill("Account settings"));
+  });
+
   it("collects leaf records across subsections without including the next section", () => {
     const tree = `[1] RootWebArea
   [2] heading: Catalog

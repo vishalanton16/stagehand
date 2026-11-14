@@ -58,7 +58,7 @@ Wrong accepts matter more than raw pass rate. A high pass rate with silent wrong
 
 - Decision models: use the rate table in `replay.ts` (`RATES`).
 - Luna / gateway: uncached input + output; call out cache hit rate if reporting cached `$`.
-- `runtime-*` arms currently set `usd: null` because usage mixes providers. Prefer reporting tokens + latency until costs are split per provider in metadata.
+- `runtime-*` replays log decision and LLM usage separately in the cost note. The estimate uses reported cached input and is null when fallback calls lack usage. Public SDK metadata still combines provider token counts.
 
 ## What not to claim
 

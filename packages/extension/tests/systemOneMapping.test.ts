@@ -53,6 +53,45 @@ describe("System One missing values", () => {
 });
 
 describe("System One composite labels", () => {
+  it("can copy the title without a dotted section number in a scalar list", async () => {
+    vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => ({
+      model: "test",
+      answers: Object.fromEntries(
+        Object.entries(questions).map(([key, question]) => {
+          if (question.type === "noul")
+            return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
+          const options = Object.entries(question.criteria);
+          const choice =
+            options.find(
+              ([, label]) =>
+                typeof label === "string" &&
+                label.startsWith("Text after the leading numeric identifier"),
+            )?.[0] ?? options[0]![0];
+          return [
+            key,
+            { type: "choice" as const, choice, probabilities: { [choice]: 1 }, confidence: 1 },
+          ];
+        }),
+      ),
+      usage: { inputTokens: 1, outputTokens: 1 },
+      durationMs: 1,
+    }));
+    const result = await mapCopyExtract(
+      { apiKey: "test" },
+      {
+        instruction: "Extract the titles. Omit section numbers.",
+        schema: {
+          type: "object",
+          required: ["titles"],
+          properties: { titles: { type: "array", items: { type: "string" } } },
+        },
+        tree: "[1] DescriptionList\n  [2] term: 2.1. Introduction\n  [3] term: 2.2. Setup\n  [4] term: 2.3. Examples",
+        urlMap: {},
+      },
+    );
+    expect(result.data).toEqual({ titles: ["Introduction", "Setup", "Examples"] });
+  });
+
   it.each([true, false])(
     "lets the model select the name separately from the code (%s)",
     async (stripPrefix) => {
@@ -143,6 +182,36 @@ it("omits an optional number when its candidate does not explicitly state the fi
     },
   );
   expect(result.data).toEqual({ title: "Example Product 2.0" });
+});
+
+it("skips field mapping when the group check rejects a standalone list", async () => {
+  const decide = vi.spyOn(client, "decide").mockResolvedValue({
+    model: "test",
+    answers: {
+      group: { type: "choice", choice: "g0", probabilities: { g0: 1 }, confidence: 1 },
+      is_g0: { type: "noul", noul: 0.1 },
+    },
+    usage: { inputTokens: 1, outputTokens: 1 },
+    durationMs: 1,
+  });
+  await expect(
+    mapCopyExtract(
+      { apiKey: "test" },
+      {
+        instruction: "Extract every item.",
+        schema: {
+          type: "object",
+          required: ["items"],
+          properties: { items: { type: "array", items: { type: "string" } } },
+        },
+        tree: "[0-1] list\n  [0-2] listitem: Bronze\n  [0-3] listitem: Silver\n  [0-4] listitem: Gold",
+        urlMap: {},
+        verify: true,
+        askVerifier: false,
+      },
+    ),
+  ).rejects.toThrow("group-disagree:items");
+  expect(decide).toHaveBeenCalledTimes(1);
 });
 
 it("starts speculative field mapping before group selection completes", async () => {

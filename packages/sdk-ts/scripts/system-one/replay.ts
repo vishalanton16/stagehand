@@ -27,28 +27,9 @@ import { parseOutline } from "../../../extension/services/decisions/tree.js";
 import { runWithProgress } from "../../../extension/understudy/progress.js";
 import { injectUrls, transformSchema } from "../../../extension/utils.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
-import { CORPUS_DIR } from "./capture.js";
-import * as corpus from "./corpus.js";
+import { CORPUS_DIR, corpusTasks } from "./capture.js";
 import type { CorpusTask } from "./corpus.js";
-import { heldoutTasks } from "./heldout.js";
-import { heldout2Tasks } from "./heldout2.js";
-import { heldout3Tasks } from "./heldout3.js";
-import { heldout4Tasks } from "./heldout4.js";
-
-import { heldout5Tasks } from "./heldout5.js";
-import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
-
-const tasks = [
-  ...corpus.tasks,
-  ...heldoutTasks,
-  ...heldout2Tasks,
-  ...heldout3Tasks,
-  ...heldout4Tasks,
-  ...heldout5Tasks,
-  ...heldout6Tasks,
-  ...confirmationTasks,
-];
-import { extraArms } from "./arms.js";
+import { extraArms, oracleArm } from "./arms.js";
 
 const env = process.env;
 
@@ -273,6 +254,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     "off",
   );
   const armNames = env.REPLAY_ARMS?.split(",") ?? Object.keys(arms);
+  const availableArms: Record<string, Arm> = { ...arms, "runtime-decider-v13-oracle": oracleArm };
   const taskNames = env.REPLAY_TASKS?.split(",");
   const rounds = Number(env.REPLAY_ROUNDS ?? 1);
   const concurrency = Number(env.REPLAY_CONCURRENCY ?? 6);
@@ -280,12 +262,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Invalid ${name}: ${value}`);
   }
   for (const name of taskNames ?? []) {
-    if (!tasks.some((task) => task.name === name)) throw new Error(`Unknown task ${name}`);
+    if (!corpusTasks.some((task) => task.name === name)) throw new Error(`Unknown task ${name}`);
   }
   for (const name of armNames) {
-    if (!arms[name]) throw new Error(`Unknown arm ${name}`);
+    if (!availableArms[name]) throw new Error(`Unknown arm ${name}`);
   }
-  const selectedTasks = tasks.filter((task) => !taskNames || taskNames.includes(task.name));
+  const selectedTasks = corpusTasks.filter((task) => !taskNames || taskNames.includes(task.name));
   const snapshots = new Map(selectedTasks.map((task) => [task.name, loadFrozen(task.name)]));
   const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
   const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -334,12 +316,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   process.stderr.write(JSON.stringify({ run }) + "\n");
   const jobs: (() => Promise<void>)[] = [];
   for (let round = 0; round < rounds; round++) {
-    for (const task of tasks) {
-      if (taskNames && !taskNames.includes(task.name)) continue;
+    for (const task of selectedTasks) {
       const frozen = snapshots.get(task.name)!;
       const snapshotHash = hash(JSON.stringify(frozen));
       for (const armName of armNames) {
-        const arm = arms[armName];
+        const arm = availableArms[armName];
         if (!arm) throw new Error(`Unknown arm ${armName}`);
         jobs.push(async () => {
           const usage: Usage = { calls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
@@ -362,6 +343,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
             error = (err instanceof Error ? err.message : String(err)).slice(0, 300);
           }
           const failure = error ?? task.grade(data ?? {});
+          const costNote = notes.find((note) => (note as { step?: string })?.step === "cost") as
+            | { usd: number | null }
+            | undefined;
           const line =
             JSON.stringify({
               run,
@@ -376,13 +360,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
               ms: Math.round(performance.now() - start),
               treeChars: frozen.tree.length,
               usage,
-              usd: armName.startsWith("runtime-")
-                ? null
-                : ((
-                    notes.find((note) => (note as { step?: string })?.step === "cost") as
-                      | { usd?: number }
-                      | undefined
-                  )?.usd ?? cost(arm.rate, usage)),
+              usd: costNote
+                ? costNote.usd
+                : armName.startsWith("runtime-")
+                  ? null
+                  : cost(arm.rate, usage),
               data,
               notes,
             }) + "\n";

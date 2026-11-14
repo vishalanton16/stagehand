@@ -332,6 +332,117 @@ function rankGroups(view: DataView, list: ListPlan, instruction: string): Group[
   return shortlist;
 }
 
+function groupSourceLabels(view: DataView, group: Group): string[] {
+  const labels = new Set([group.context[0] ?? "", ...group.sections]);
+  const tables = new Set<OutlineNode>();
+  for (const record of group.records) {
+    let parent = record.parent;
+    while (parent !== undefined) {
+      const node = view.nodes[parent]!;
+      if (/^(table|grid|layouttable)$/i.test(node.role)) {
+        tables.add(node);
+        break;
+      }
+      parent = node.parent;
+    }
+  }
+  for (const table of tables) {
+    labels.add(table.name);
+    const caption = view.children[table.index]!.map((index) => view.nodes[index]!).find((node) =>
+      /^caption$/i.test(node.role),
+    );
+    if (caption) labels.add(recordText(view, caption, 140));
+    // A table is often introduced by a short paragraph outside its container.
+    let container = table;
+    while (container.parent !== undefined) {
+      const siblings = view.children[container.parent]!;
+      const position = siblings.indexOf(container.index);
+      if (position > 0) {
+        const prior = view.nodes[siblings[position - 1]!]!;
+        if (/^(paragraph|heading|statictext)$/i.test(prior.role))
+          labels.add(recordText(view, prior, 140));
+        break;
+      }
+      if (siblings.length !== 1) break;
+      container = view.nodes[container.parent]!;
+    }
+  }
+  return [...labels];
+}
+
+function schemaRankGroups(view: DataView, list: ListPlan, instruction: string): Group[] {
+  const task = tokens([instruction, list.name, list.description].join(" "));
+  const fields = list.fields.map((field) => ({ field, terms: tokens(fieldText(field)) }));
+  const wanted = new Set([...task, ...fields.flatMap(({ terms }) => [...terms])]);
+  return view.groups
+    .map((group) => {
+      const slots = group.slots
+        .filter((slot) => slot.coverage >= 0.5)
+        .map((slot) => ({
+          slot,
+          label: tokens(slot.label ?? ""),
+          numeric:
+            slot.samples.length > 0 &&
+            slot.samples.every((value) => numberCandidates(value).length > 0),
+        }));
+      if (slots.length === 0) return { group, score: -Infinity };
+      const scopeMatch = Math.max(
+        0,
+        ...groupSourceLabels(view, group).map((heading) => {
+          const terms = tokens(heading);
+          return overlap(task, terms) / Math.sqrt(Math.max(terms.size, 1));
+        }),
+      );
+      const coverage =
+        fields.reduce((sum, { field, terms }) => {
+          let best = 0;
+          for (const { slot, numeric, label } of slots) {
+            if (!(field.type === "url" ? slot.link : field.type === "string" || numeric)) continue;
+            const match = overlap(terms, label) / Math.sqrt(Math.max(label.size, 1));
+            best = Math.max(best, slot.coverage * (1 + match));
+          }
+          return sum + best;
+        }, 0) / Math.max(1, fields.length);
+      const explicitRecord = /^(row|layouttablerow|term|listitem|label|article)$/.test(group.role);
+      const sample = tokens(
+        group.records
+          .slice(0, 3)
+          .map((record) => recordText(view, record, 150))
+          .join(" "),
+      );
+      const score =
+        3 * scopeMatch +
+        4 * coverage +
+        Number(explicitRecord) +
+        0.35 * overlap(wanted, sample) +
+        0.25 * Math.log1p(group.records.length);
+      return { group, score };
+    })
+    .filter(({ score }) => Number.isFinite(score))
+    .sort((a, b) => b.score - a.score)
+    .map(({ group }) => group);
+}
+
+export function listGroupRanks(input: {
+  schema: JsonSchema;
+  instruction: string;
+  tree: string;
+  urlMap: Record<string, string>;
+}) {
+  const view = buildDataView(input.tree, input.urlMap);
+  return plan(input.schema).lists.map((list) => ({
+    list: list.name,
+    groups: view.groups.map((group) => ({
+      id: group.id,
+      records: group.records.map((record) => record.id),
+    })),
+    baseline: rankGroups(view, list, input.instruction).map((group) => group.id),
+    schema: schemaRankGroups(view, list, input.instruction).map((group) => group.id),
+  }));
+}
+
+export type ListGroupExperiment = "schema" | { oracleGroup: string };
+
 function describeGroup(view: DataView, group: Group): string {
   const where = group.sections.length
     ? ` in ${group.sections.length} sections (${clip(group.sections.filter(Boolean).slice(0, 3).join("; "), 80)})`
@@ -381,13 +492,16 @@ function buildListMapping(view: DataView, list: ListPlan, instruction: string, g
       rankSlots(group.slots, field).flatMap((slot) => {
         const whole = { slot, withoutPrefix: false, description: describeSlot(slot, field) };
         if (
-          !hasNumericField ||
           field.type !== "string" ||
           slot.samples.length < 2 ||
-          !slot.samples.every((sample) => textAfterNumericPrefix(sample) !== undefined)
+          !slot.samples.every(
+            (sample) => textAfterNumericPrefix(sample, hasNumericField) !== undefined,
+          )
         )
           return [whole];
-        const samples = slot.samples.map((sample) => textAfterNumericPrefix(sample)!);
+        const samples = slot.samples.map((sample) =>
+          textAfterNumericPrefix(sample, hasNumericField)!,
+        );
         return [
           whole,
           {
@@ -451,32 +565,19 @@ function buildListMapping(view: DataView, list: ListPlan, instruction: string, g
     }
   }
   const preview = group.records.slice(0, 3).map((record) => recordText(view, record, 300));
-  return { slotOptions, counts, sections, bySection, preview, questions };
+  return { slotOptions, counts, sections, bySection, preview, questions, hasNumericField };
 }
 
-async function readList(
+async function chooseListGroup(
   config: DecisionModelConfig,
   view: DataView,
   list: ListPlan,
   instruction: string,
+  groups: Group[],
   trace: TraceEntry[],
-  speculateListMapping: boolean,
-): Promise<unknown[] | undefined> {
-  const groups = rankGroups(view, list, instruction);
-  if (groups.length === 0) return undefined;
+  stopOnDisagreement: boolean,
+): Promise<Group | undefined> {
   const groupStarted = performance.now();
-  const candidate = groups[0]!;
-  const speculative = speculateListMapping
-    ? (() => {
-        const mapping = buildListMapping(view, list, instruction, candidate);
-        return {
-          mapping,
-          response: ask(config, { task: instruction, items: mapping.preview }, mapping.questions),
-        };
-      })()
-    : undefined;
-  // The group answer can reject this candidate. Observe its failure immediately.
-  void speculative?.response.catch(() => {});
   const want = list.fields.map(fieldText).join(", ");
   const listName = list.name.replaceAll("_", " ");
   // The same choice asked a second way: each group on its own, as a yes/no
@@ -523,8 +624,46 @@ async function readList(
     confidence: best?.yes ?? 0,
     options: groups.length,
   });
-  if (group && best && (best.id !== group.id || best.yes < 0.5))
-    problem(trace, `group-disagree:${list.name}`);
+  if (group && best && (best.id !== group.id || best.yes < 0.5)) {
+    const reason = `group-disagree:${list.name}`;
+    problem(trace, reason);
+    if (stopOnDisagreement) throw new Error(reason);
+  }
+  return group;
+}
+
+async function readList(
+  config: DecisionModelConfig,
+  view: DataView,
+  list: ListPlan,
+  instruction: string,
+  trace: TraceEntry[],
+  speculateListMapping: boolean,
+  groupExperiment: ListGroupExperiment | undefined,
+  stopOnDisagreement: boolean,
+): Promise<unknown[] | undefined> {
+  const groups =
+    groupExperiment === "schema"
+      ? schemaRankGroups(view, list, instruction).slice(0, 8)
+      : rankGroups(view, list, instruction);
+  if (groups.length === 0 && typeof groupExperiment !== "object") return undefined;
+  const candidate = groups[0]!;
+  const speculative =
+    speculateListMapping && candidate && typeof groupExperiment !== "object"
+      ? (() => {
+          const mapping = buildListMapping(view, list, instruction, candidate);
+          return {
+            mapping,
+            response: ask(config, { task: instruction, items: mapping.preview }, mapping.questions),
+          };
+        })()
+      : undefined;
+  // The group answer can reject this candidate. Observe its failure immediately.
+  void speculative?.response.catch(() => {});
+  const group =
+    typeof groupExperiment === "object"
+      ? view.groups.find((candidate) => candidate.id === groupExperiment.oracleGroup)
+      : await chooseListGroup(config, view, list, instruction, groups, trace, stopOnDisagreement);
   if (!group) return undefined;
   trace.push({
     step: `${list.name}:page-items`,
@@ -536,7 +675,7 @@ async function readList(
   const mappingStarted = performance.now();
   const reused = speculative && group === candidate ? speculative : undefined;
   const mappingRequest = reused?.mapping ?? buildListMapping(view, list, instruction, group);
-  const { slotOptions, counts, sections, bySection } = mappingRequest;
+  const { slotOptions, counts, sections, bySection, hasNumericField } = mappingRequest;
   const { answers } = await (reused?.response ??
     ask(config, { task: instruction, items: mappingRequest.preview }, mappingRequest.questions));
   trace.push({
@@ -725,7 +864,7 @@ async function readList(
         : [];
       let value =
         slot && namesWithoutPrefix.has(field.name)
-          ? textAfterNumericPrefix(readSlot(view, record, slot.key)?.name ?? "")
+          ? textAfterNumericPrefix(readSlot(view, record, slot.key)?.name ?? "", hasNumericField)
           : slot && inner.length && field.type === "string"
             ? residual(
                 view,
@@ -774,8 +913,11 @@ async function readList(
   return items;
 }
 
-function textAfterNumericPrefix(label: string): string | undefined {
-  return /^\s*\d+\s+(\p{L}.*)$/u.exec(label.replace(/\s+/g, " ").trim())?.[1]?.trim();
+function textAfterNumericPrefix(label: string, allowBareInteger: boolean): string | undefined {
+  const text = label.replace(/\s+/g, " ").trim();
+  const section = /^\d+(?:\.\d+)*\.\s+(\p{L}.*)$/u.exec(text);
+  if (section || !allowBareInteger) return section?.[1];
+  return /^\d+\s+(\p{L}.*)$/u.exec(text)?.[1];
 }
 
 /**
@@ -1237,6 +1379,7 @@ export async function mapCopyExtract(
     verify = false,
     askVerifier = verify,
     speculateListMapping = false,
+    groupExperiment,
   }: {
     instruction: string;
     schema: JsonSchema;
@@ -1249,16 +1392,31 @@ export async function mapCopyExtract(
     verify?: boolean;
     askVerifier?: boolean;
     speculateListMapping?: boolean;
+    groupExperiment?: ListGroupExperiment;
   },
 ): Promise<{ data: Record<string, unknown>; trace: TraceEntry[]; verdict?: Verdict }> {
   const { lists, scalars } = plan(schema);
   const view = buildDataView(tree, urlMap);
+  // With one list and no other work in flight, a rejected group can fall back immediately.
+  const stopOnDisagreement =
+    verify && !askVerifier && !speculateListMapping && lists.length === 1 && scalars.length === 0;
   const [scalarData, listData] = await Promise.all([
     scalars.length
       ? readScalars(config, view, scalars, instruction, trace, reader, readerChecks)
       : Promise.resolve({}),
     Promise.all(
-      lists.map((list) => readList(config, view, list, instruction, trace, speculateListMapping)),
+      lists.map((list) =>
+        readList(
+          config,
+          view,
+          list,
+          instruction,
+          trace,
+          speculateListMapping,
+          groupExperiment,
+          stopOnDisagreement,
+        ),
+      ),
     ),
   ]);
   const data: Record<string, unknown> = { ...scalarData };

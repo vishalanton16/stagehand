@@ -3,6 +3,7 @@ import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 import { env } from "node:process";
 import { z } from "zod/v4";
 import { mapCopyExtract, type ScalarReader } from "./mapCopy.js";
+import { groupLabels } from "./groupLabels.js";
 import {
   cost,
   gateway,
@@ -273,12 +274,30 @@ const flash: Member = { model: "flash", rate: "flash" };
 const jev: Member = { model: "jev", rate: "jev" };
 
 /** New extraction designs under test; each is compared against the arms in replay.ts. */
-function runtimeMap(model: "decider" | "flash", speculateListMapping = false): Arm {
+function runtimeMap(
+  model: "decider" | "flash",
+  {
+    speculateListMapping = false,
+    experiment,
+  }: {
+    speculateListMapping?: boolean;
+    experiment?: "baseline" | "schema" | "oracle";
+  } = {},
+): Arm {
   return {
     rate: model,
     run: async (context) => {
       let llmCalls = 0;
-      let decisionRequests = 0;
+      const decisionUsage: Usage = {
+        calls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+      };
+      const llmUsage: Usage = { ...decisionUsage };
+      const oracleGroup = groupLabels[context.task.name]?.oracle;
+      if (experiment === "oracle" && !oracleGroup)
+        throw new Error(`Missing oracle group for ${context.task.name}`);
       const result = await extractService.extract({
         params: {
           pageId: "replay",
@@ -297,19 +316,34 @@ function runtimeMap(model: "decider" | "flash", speculateListMapping = false): A
         model: { source: "client" },
         decisions: {
           ...decisionConfigs[model],
+          ...(experiment ? { model: "pplx-decider-v1.3" } : {}),
           extract: "map",
-          recordDecisionUsage: () => {
-            decisionRequests++;
-            context.usage.calls++;
+          recordDecisionUsage: ({ inputTokens, outputTokens }) => {
+            count(decisionUsage, inputTokens, outputTokens);
+            count(context.usage, inputTokens, outputTokens);
           },
         },
         clientLLMGenerate: (params) => {
           llmCalls++;
           context.usage.calls++;
-          return generateWithOpenAI(gateway, env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna", params);
+          return generateWithOpenAI(
+            gateway,
+            env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna",
+            params,
+            (usage) => {
+              count(llmUsage, usage.inputTokens, usage.outputTokens);
+              llmUsage.cachedInputTokens += usage.cachedInputTokens ?? 0;
+            },
+          );
         },
         logger: context.logger,
         speculateListMapping,
+        groupExperiment:
+          experiment === "oracle" && oracleGroup
+            ? { oracleGroup }
+            : experiment === "schema"
+              ? experiment
+              : undefined,
       });
       Object.assign(context.usage, {
         inputTokens: result.metadata.usage.inputTokens,
@@ -319,11 +353,16 @@ function runtimeMap(model: "decider" | "flash", speculateListMapping = false): A
       context.notes.push({
         step: "cascade",
         decision: llmCalls ? "escalate" : "accept",
-        decisionRequests,
+        decisionRequests: decisionUsage.calls,
         llmCalls,
       });
-      // Mixed-provider costs require per-provider rates; this arm measures usage and correctness.
-      context.notes.push({ step: "cost", usd: null });
+      context.notes.push({
+        step: "cost",
+        usd:
+          llmCalls === llmUsage.calls ? cost(model, decisionUsage) + cost("luna", llmUsage) : null,
+        decisionUsage,
+        llmUsage,
+      });
       return result.data;
     },
   };
@@ -331,8 +370,14 @@ function runtimeMap(model: "decider" | "flash", speculateListMapping = false): A
 
 export const extraArms: Record<string, Arm> = {
   "runtime-decider": runtimeMap("decider"),
-  "runtime-decider-speculative": runtimeMap("decider", true),
+  "runtime-decider-speculative": runtimeMap("decider", { speculateListMapping: true }),
   "runtime-flash": runtimeMap("flash"),
+  "runtime-decider-v13": runtimeMap("decider", { experiment: "baseline" }),
+  "runtime-decider-v13-schema": runtimeMap("decider", {
+    experiment: "schema",
+    speculateListMapping: true,
+  }),
+  "runtime-decider-v13-schema-sequential": runtimeMap("decider", { experiment: "schema" }),
   "s1-decider": systemOne("decider", "decider", "pplx-decider-latest"),
   "s1-flash": systemOne("flash", "flash", "pplx-decider-flash-latest"),
   "s1-jev": systemOne("jev", "jev"),
@@ -354,3 +399,5 @@ export const extraArms: Record<string, Arm> = {
   ),
   "map-clef-clairic": mapCopy("clef", "clef", clairicReader),
 };
+
+export const oracleArm = runtimeMap("decider", { experiment: "oracle" });

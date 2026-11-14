@@ -2,14 +2,15 @@
 
 Status and handoff for experimental System One extraction (`extract: "map"`). The runtime uses one decision model with an LLM fallback.
 
-| Doc                                  | Purpose                                                                      |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
-| [REVIEW.md](./REVIEW.md)             | Review of the **uncommitted** production wiring on top of commit `632789220` |
-| [NEXT_STEPS.md](./NEXT_STEPS.md)     | Ordered engineering tasks with done conditions                               |
-| [EVALUATION.md](./EVALUATION.md)     | How to measure fairly (held-outs, metrics, what not to claim)                |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | How the pipeline works and where the code lives                              |
-| [ROADMAP.md](./ROADMAP.md)           | Product phases from experiment → default                                     |
-| [DIRECTIONS.md](./DIRECTIONS.md)     | Alternatives and experiments that are deliberately _not_ the product default |
+| Doc                                            | Purpose                                                                      |
+| ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| [REVIEW.md](./REVIEW.md)                       | Review of the **uncommitted** production wiring on top of commit `632789220` |
+| [NEXT_STEPS.md](./NEXT_STEPS.md)               | Ordered engineering tasks with done conditions                               |
+| [EVALUATION.md](./EVALUATION.md)               | How to measure fairly (held-outs, metrics, what not to claim)                |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)           | How the pipeline works and where the code lives                              |
+| [ROADMAP.md](./ROADMAP.md)                     | Product phases from experiment → default                                     |
+| [DIRECTIONS.md](./DIRECTIONS.md)               | Alternatives and experiments that are deliberately _not_ the product default |
+| [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md) | Provider research and the next evidence-ranking experiment                   |
 
 Also read:
 
@@ -134,3 +135,7 @@ The live runner now rotates model order each round. Five real pages ran three ti
 | Luna               |  15/15 |         — | 4.50 / 5.98 s     | 5.02 / 8.57 s        |            37,316 |
 
 The earlier three-page live check had end-to-end p95 of 10.86 s for Decider and 4.48 s for Luna. The new run used a different page subset and provider session. It confirms Decider can beat Luna on these five pages and leaves cross-session tail latency open. Fifteen samples per arm make nearest-rank p95 the maximum observed time. All three Flash fallbacks came from the textbook title's scalar disagreement. Results are in `runs/plan-validation/stagehand-rotated-live.jsonl`.
+
+### Candidate ranking and source mapping
+
+The schema-aware ranker improved offline evidence retrieval, but increased fallback in the paired replay. Keep it in the replay harness. The single-request fit check also increased latency and was removed. The source-mapping changes from the oracle experiment are in the SDK path. PostgreSQL's nested chapter now passes directly on frozen replay. See [audit and trial results](./PROVIDER_RESEARCH.md#evidence-ranking-and-one-request-trials).

@@ -217,6 +217,20 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
     const section = parent.parent === undefined ? undefined : nodes[parent.parent];
     return section && /^(region|section)$/.test(lower(section)) ? section.parent : undefined;
   };
+  const descriptionLabel = (record: OutlineNode) => {
+    if (lower(record) !== "term" || record.parent === undefined) return "";
+    const list = nodes[record.parent]!;
+    if (lower(list) !== "descriptionlist" || list.parent === undefined) return "";
+    const definition = nodes[list.parent]!;
+    if (lower(definition) !== "definition" || definition.parent === undefined) return "";
+    const siblings = children[definition.parent]!;
+    for (let i = siblings.indexOf(definition.index) - 1; i >= 0; i--) {
+      const sibling = nodes[siblings[i]!]!;
+      if (lower(sibling) === "term") return sibling.name;
+      if (lower(sibling) !== "definition") break;
+    }
+    return "";
+  };
   const canMerge = (left: (typeof raw)[number], right: (typeof raw)[number]) => {
     if (left.role !== right.role || lower(left.parent) !== lower(right.parent)) return false;
     if (left.role === "term" && lower(left.parent) === "descriptionlist") {
@@ -464,6 +478,8 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
       let separator = "";
       for (const [index, text] of separators) if (index < record.index) separator = text;
       if (separator) return clip(separator, 60);
+      const term = descriptionLabel(record);
+      if (term) return term;
       // A short preceding sibling that is not a record, e.g. a category row.
       const parent = record.parent === undefined ? undefined : nodes[record.parent];
       if (parent) {

@@ -59,6 +59,8 @@ type ExtractServiceOptions = {
   decisions?: DecisionsConfig;
   progress?: Progress;
   speculateListMapping?: boolean;
+  /** Internal replay control. SDK calls use the default group selection. */
+  groupExperiment?: Parameters<typeof mapCopyExtract>[1]["groupExperiment"];
 };
 
 export async function extract(options: ExtractServiceOptions): Promise<ExtractResult> {
@@ -80,6 +82,7 @@ async function extractWithProgress(
     gateway,
     decisions,
     speculateListMapping,
+    groupExperiment,
   }: ExtractServiceOptions,
   progress: Progress,
 ): Promise<ExtractResult> {
@@ -216,6 +219,7 @@ async function extractWithProgress(
             verify: true,
             askVerifier: false,
             speculateListMapping,
+            groupExperiment,
             trace,
           }),
         );

@@ -11,7 +11,7 @@ import { heldout4Tasks } from "./heldout4.js";
 import { heldout5Tasks } from "./heldout5.js";
 import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
 
-const tasks = [
+export const corpusTasks = [
   ...corpus.tasks,
   ...heldoutTasks,
   ...heldout2Tasks,
@@ -89,7 +89,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const stagehand = await Stagehand.create({ browser, logging: { level: "off" } });
     try {
       const page = await browser.context.newPage();
-      for (const task of tasks) {
+      for (const task of corpusTasks) {
         if (only && !only.includes(task.name)) continue;
         try {
           const local = task.url.startsWith(EVAL_ORIGIN);
