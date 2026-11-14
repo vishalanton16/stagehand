@@ -36,6 +36,7 @@ import { heldout3Tasks } from "./heldout3.js";
 import { heldout4Tasks } from "./heldout4.js";
 
 import { heldout5Tasks } from "./heldout5.js";
+import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
 
 const tasks = [
   ...corpus.tasks,
@@ -44,6 +45,8 @@ const tasks = [
   ...heldout3Tasks,
   ...heldout4Tasks,
   ...heldout5Tasks,
+  ...heldout6Tasks,
+  ...confirmationTasks,
 ];
 import { extraArms } from "./arms.js";
 
@@ -344,10 +347,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
           let data: unknown;
           let error: string | undefined;
           const notes: unknown[] = [];
-          const runLogger = new StagehandLogger(logger.tracing, (event) => {
-            if (event.data.category === "decisions" || event.data.category === "decisions-usage")
-              notes.push(event);
-          });
+          const runLogger = new StagehandLogger(
+            logger.tracing,
+            (event) => {
+              if (event.data.category === "decisions" || event.data.category === "decisions-usage")
+                notes.push(event);
+            },
+            undefined,
+            env.REPLAY_DEBUG === "1" ? "debug" : "info",
+          );
           try {
             data = await arm.run({ task, frozen, usage, logger: runLogger, notes });
           } catch (err) {

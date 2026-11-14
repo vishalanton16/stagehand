@@ -576,6 +576,48 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
         break;
       end++;
     }
+    // Some manuals render a list as alternating label and description paragraphs.
+    // Keep that sequence within the heading that owns it.
+    if (heading.parent !== undefined && heading.name) {
+      const paragraphs = children[heading.parent]!.filter(
+        (index) => index > heading.index && index < end,
+      ).map((index) => nodes[index]!);
+      const isLabel = (text: string) =>
+        text.length > 0 && text.length <= 48 && !/[.!?]$/.test(text);
+      for (const offset of [0, 1]) {
+        const run = paragraphs.slice(offset);
+        if (run.length < 6 || run.length % 2 || run.some((node) => lower(node) !== "paragraph"))
+          continue;
+        const labels = run.filter((_, index) => index % 2 === 0).map(textOf);
+        if (
+          !labels.every(isLabel) ||
+          !run.every((node, index) => index % 2 === 0 || !isLabel(textOf(node)))
+        )
+          continue;
+        const records = run
+          .filter((_, index) => index % 2 === 0)
+          .map((node) => firstLeaf(nodes, node));
+        if (records.some((node) => !named(node))) continue;
+        groups.push({
+          id: `labels-${heading.index}`,
+          role: "label",
+          records,
+          context: records.map(() => heading.name),
+          sections: [heading.name],
+          slots: [
+            {
+              key: ".",
+              label: heading.name,
+              coverage: 1,
+              samples: records.slice(0, 3).map((node) => node.name),
+              link: false,
+              urlSamples: [],
+            },
+          ],
+        });
+        break;
+      }
+    }
     for (const group of finer) {
       const positions = group.records.flatMap((record, index) =>
         record.index > heading.index && record.index < end ? [index] : [],

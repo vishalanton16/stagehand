@@ -8,6 +8,7 @@ import { z } from "zod/v4";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heldout5Tasks } from "./heldout5.js";
+import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 
 process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH ??= fileURLToPath(
@@ -77,7 +78,9 @@ const cases = [
 ];
 
 const realTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
-  const task = heldout5Tasks.find((candidate) => candidate.name === name);
+  const task = [...heldout5Tasks, ...heldout6Tasks, ...confirmationTasks].find(
+    (candidate) => candidate.name === name,
+  );
   if (!task) throw new Error(`Unknown live task ${name}`);
   return task;
 });

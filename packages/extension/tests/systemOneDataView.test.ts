@@ -73,3 +73,32 @@ describe("nested record scopes", () => {
     expect(group?.sections).toEqual(["Basics", "Advanced", "Other"]);
   });
 });
+
+it("builds records for alternating labels and prose within one heading", () => {
+  const tree = `[1] document
+  [2] heading: Commands
+  [3] paragraph
+    [4] StaticText: Use the following commands.
+  [5] paragraph
+    [6] StaticText: Open
+  [7] paragraph
+    [8] StaticText: Opens the current project.
+  [9] paragraph
+    [10] StaticText: Save
+  [11] paragraph
+    [12] StaticText: Saves changes to disk.
+  [13] paragraph
+    [14] StaticText: Close
+  [15] paragraph
+    [16] StaticText: Closes the current project.
+  [17] heading: Notes
+  [18] paragraph
+    [19] StaticText: Draft`;
+  const group = buildDataView(tree, {}).groups.find((candidate) => candidate.role === "label");
+  expect(group?.sections).toEqual(["Commands"]);
+  expect(group?.records.map((record) => [record.id, record.name])).toEqual([
+    ["6", "Open"],
+    ["10", "Save"],
+    ["14", "Close"],
+  ]);
+});

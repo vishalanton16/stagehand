@@ -9,6 +9,7 @@ import { heldout3Tasks } from "./heldout3.js";
 import { heldout4Tasks } from "./heldout4.js";
 
 import { heldout5Tasks } from "./heldout5.js";
+import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
 
 const tasks = [
   ...corpus.tasks,
@@ -17,6 +18,8 @@ const tasks = [
   ...heldout3Tasks,
   ...heldout4Tasks,
   ...heldout5Tasks,
+  ...heldout6Tasks,
+  ...confirmationTasks,
 ];
 
 export const CORPUS_DIR = new URL("../../../../vendor-repos/system-one-corpus/", import.meta.url);

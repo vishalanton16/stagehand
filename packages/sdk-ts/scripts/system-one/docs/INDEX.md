@@ -51,3 +51,36 @@ The MDN task returned 38 of 63 requested status codes and passed the runtime che
 | Craigslist, separate tables, Python documentation links, and mountain names |                         | 8/8, all accepted directly                    |
 
 Description-list terms now group across sibling regions with the same parent even when their label markup differs. The mapper still needs to distinguish a name from the number in a composite label. The targeted replay is archived under `runs/archive/d6f9c44b-c34a-4d99-ab32-62496be6b90f/`. A full seen-set rerun remains pending for this change.
+
+The composite-label follow-up gives the mapper both the whole label and the trailing text when a list schema asks for numeric and text fields. Decider passed both MDN runs with all 63 codes and separate names. Both runs used two decision requests and no fallback. All eight related targeted runs passed.
+
+| Seen replay   | Before either follow-up | After both follow-ups |
+| ------------- | ----------------------: | --------------------: |
+| Passed        |                   96/98 |                 98/98 |
+| Wrong accepts |                       2 |                     0 |
+| Fallbacks     |                      19 |                    19 |
+| p50 latency   |                  4.15 s |                4.14 s |
+| p95 latency   |                 11.32 s |               14.75 s |
+
+The rerun used a separate provider session with concurrency 7 versus 6 for the baseline, so the p95 difference cannot be attributed to the code alone. The replay is archived under `runs/archive/fddc6f3f-cab7-40ed-a852-5df496fefd78/`. The seen set informed the fixes.
+
+### Heldout 6 and follow-up experiments
+
+Four usable site-disjoint snapshots covered scalar facts, optional evidence, a table, and a manual with paragraph-form lists. Wikibooks returned a missing page, MTU returned an error page, and the Sonic Pi snapshot lacked explicit evidence for the requested creator. The four scored graders were frozen before model calls.
+
+| Replay arm     | Passed | Direct accepts | Wrong accepts | Fallbacks | p50 / p95      |
+| -------------- | -----: | -------------: | ------------: | --------: | -------------- |
+| Decider + Luna |    6/8 |              6 |             2 |         2 | 5.50 / 10.44 s |
+| Flash + Luna   |    8/8 |              4 |             0 |         4 | 3.50 / 7.41 s  |
+| Luna           |    7/8 |              — |             — |         — | 5.03 / 6.62 s  |
+
+Both decision models fell back on curl's protocol list. Decider twice used the number in a textbook title as evidence for an optional edition. Luna made the same inference once. The baseline is archived under `runs/archive/b3acb4f6-8d3c-4192-84e7-412703e3fbcd/`.
+
+- Heading-scoped grouping now builds a candidate from alternating short labels and descriptive paragraphs. A matching heading earns a place in the candidate shortlist even on long pages. Decider and Flash both extracted all 16 curl protocols directly in both targeted rounds.
+- Optional scalar questions now include an explicit-evidence check in the existing choice request. Decider omitted the inferred edition in both targeted rounds. Flash disagreed with its Locate reading for the title and fell back twice. One fallback still inferred an edition.
+- A separate nginx check exposed an independent coverage failure. Decider selected the right table and then dropped WINCH during filtering, since the same signal appeared in another table. The subset and row questions now name the selected group as their scope. Both Decider nginx reruns passed directly.
+- The curl, textbook, and nginx reruns are regression evidence. Their results are archived under `runs/archive/de9b6a51-5653-436a-9b89-063b4dd1b822/` and `runs/archive/9a9b6a36-db86-49ad-a719-6a8c9cd3d80d/`.
+
+The scoped-filter version passed **98/98** seen replays with **80** direct accepts, **18** fallbacks, and **zero** wrong accepts. Replay p50/p95 was 4.67/14.78 s. That run is archived under `runs/archive/e312cf85-675f-45bd-9d30-800ef8bf7d6e/`.
+
+Both arms passed the live public SDK smoke check on nginx and curl. Decider accepted both directly. End-to-end times were 7.13/8.59 s for Decider and 5.00/5.92 s for Luna, in nginx/curl order. See `runs/plan-validation/stagehand-held6-live.jsonl`. The separate first nginx comparison is preserved under `runs/archive/a283132a-fda1-4156-9c6b-1cca3a633ee8/`. GNU Make was excluded from that check after navigation timed out.

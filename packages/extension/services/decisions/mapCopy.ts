@@ -299,7 +299,7 @@ function rankGroups(view: DataView, list: ListPlan, instruction: string): Group[
   const wanted = tokens(
     [instruction, list.name, list.description, ...list.fields.map(fieldText)].join(" "),
   );
-  return view.groups
+  const ranked = view.groups
     .map((group) => {
       const rich = group.slots.filter((slot) => slot.coverage >= 0.5).length;
       const text = [
@@ -313,8 +313,23 @@ function rankGroups(view: DataView, list: ListPlan, instruction: string): Group[
     })
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 8)
     .map(({ group }) => group);
+  const shortlist = ranked.slice(0, 8);
+  // A long manual can have thousands of paragraphs. Reserve a slot for a
+  // complete label sequence whose heading matches the requested scalar list.
+  if (list.scalarItems) {
+    const matchingLabels = ranked.find(
+      (group) =>
+        group.role === "label" &&
+        group.sections.some((heading) => {
+          const label = tokens(heading);
+          return label.size > 0 && overlap(wanted, label) === label.size;
+        }),
+    );
+    if (matchingLabels && !shortlist.includes(matchingLabels))
+      shortlist.splice(7, 1, matchingLabels);
+  }
+  return shortlist;
 }
 
 function describeGroup(view: DataView, group: Group): string {
@@ -415,8 +430,32 @@ async function readList(
     options: 0,
   });
 
+  const hasNumericField = list.fields.some(
+    (field) => field.type === "number" || field.type === "integer",
+  );
   const slotOptions = new Map(
-    list.fields.map((field) => [field.name, rankSlots(group.slots, field)]),
+    list.fields.map((field) => [
+      field.name,
+      rankSlots(group.slots, field).flatMap((slot) => {
+        const whole = { slot, withoutPrefix: false, description: describeSlot(slot, field) };
+        if (
+          !hasNumericField ||
+          field.type !== "string" ||
+          slot.samples.length < 2 ||
+          !slot.samples.every((sample) => textAfterNumericPrefix(sample) !== undefined)
+        )
+          return [whole];
+        const samples = slot.samples.map((sample) => textAfterNumericPrefix(sample)!);
+        return [
+          whole,
+          {
+            slot,
+            withoutPrefix: true,
+            description: `Text after the leading numeric identifier in the same label, ${describeSlot({ ...slot, samples }, field)}`,
+          },
+        ];
+      }),
+    ]),
   );
   const questions: Record<string, DecisionQuestion> = {};
   for (const field of list.fields) {
@@ -425,7 +464,7 @@ async function readList(
       type: "choice",
       instructions: `Task: ${instruction}\nIn each item, which part holds "${fieldText(field)}"? Prefer the part that holds just this value, without extra text.`,
       criteria: {
-        ...Object.fromEntries(slots.map((slot, i) => [`s${i}`, describeSlot(slot, field)])),
+        ...Object.fromEntries(slots.map((option, i) => [`s${i}`, option.description])),
         [NONE]: "Not present in the items",
       },
     };
@@ -446,7 +485,7 @@ async function readList(
     sections.length >= 2 && sections.length <= Math.min(24, group.records.length / 2);
   questions.subset = {
     type: "noul",
-    instructions: `Task: ${instruction}\nThe page has ${group.records.length} such items${bySection ? ` under these section labels: ${clip(sections.join("; "), 400)}` : ""}. Does the task ask for only some of them (for example one category or a date range), rather than all of them?`,
+    instructions: `Task: ${instruction}\nThe page has ${group.records.length} such items${bySection ? ` under these section labels: ${clip(sections.join("; "), 400)}` : ""}. Within this already selected group, does the task ask for only some of its items? A request for all items in this particular group does not ask for a subset just because other groups on the page should be excluded.`,
   };
   if (bySection) {
     const listing = clip(sections.map((section, i) => `${i + 1}. ${section}`).join("; "), 500);
@@ -473,6 +512,7 @@ async function readList(
   const second = await ask(config, { task: instruction, items: preview }, questions);
 
   const mapping = new Map<string, Slot | undefined>();
+  const namesWithoutPrefix = new Set<string>();
   for (const field of list.fields) {
     const slots = slotOptions.get(field.name)!;
     const { choice } = choiceOf(
@@ -482,10 +522,12 @@ async function readList(
       `${list.name}.${field.name}`,
       slots.length + 1,
     );
-    let slot = choice === NONE ? undefined : slots[Number(choice.slice(1))];
-    const linked = slots.filter((candidate) => candidate.link);
-    if (!slot && field.type === "url" && linked.length === 1) slot = linked[0];
+    const option = choice === NONE ? undefined : slots[Number(choice.slice(1))];
+    const linked = slots.filter((candidate) => candidate.slot.link);
+    const slot =
+      option?.slot ?? (field.type === "url" && linked.length === 1 ? linked[0]?.slot : undefined);
     mapping.set(field.name, slot);
+    if (option?.withoutPrefix) namesWithoutPrefix.add(field.name);
   }
   if (list.fields.every((field) => !mapping.get(field.name))) return undefined;
 
@@ -577,7 +619,7 @@ async function readList(
           `r${index}`,
           {
             type: "noul",
-            instructions: `Task: ${instruction}\nShould this item be included? Item ${index + 1} of ${group.records.length}: ${recordText(view, record, 220)}`,
+            instructions: `Task: ${instruction}\nThis record belongs to the already selected group, ${describeGroup(view, group)}. Judge inclusion based on the request within that group. Similar text elsewhere does not change this record's membership. Should this item be included? Item ${index + 1} of ${group.records.length}: ${recordText(view, record, 220)}`,
           } satisfies DecisionQuestion,
         ]),
       ),
@@ -647,20 +689,22 @@ async function readList(
           )
         : [];
       let value =
-        slot && inner.length && field.type === "string"
-          ? residual(
-              view,
-              record,
-              slot.key,
-              inner.map((other) => other.key),
-            )
-          : slot
-            ? position.has(field.name)
-              ? (numberCandidates(readSlot(view, record, slot.key)?.name ?? "")[
-                  position.get(field.name)!
-                ]?.value ?? convert(view, readSlot(view, record, slot.key), field))
-              : convert(view, readSlot(view, record, slot.key), field)
-            : undefined;
+        slot && namesWithoutPrefix.has(field.name)
+          ? textAfterNumericPrefix(readSlot(view, record, slot.key)?.name ?? "")
+          : slot && inner.length && field.type === "string"
+            ? residual(
+                view,
+                record,
+                slot.key,
+                inner.map((other) => other.key),
+              )
+            : slot
+              ? position.has(field.name)
+                ? (numberCandidates(readSlot(view, record, slot.key)?.name ?? "")[
+                    position.get(field.name)!
+                  ]?.value ?? convert(view, readSlot(view, record, slot.key), field))
+                : convert(view, readSlot(view, record, slot.key), field)
+              : undefined;
       let sourceId = slot ? readSlot(view, record, slot.key)?.id : undefined;
       if (slot && slot.coverage < 0.5 && !list.scalarItems) {
         if (value === undefined) {
@@ -693,6 +737,10 @@ async function readList(
   for (const [field, count] of missing)
     problem(trace, `missing:${list.name}.${field}:${count}/${items.length}`);
   return items;
+}
+
+function textAfterNumericPrefix(label: string): string | undefined {
+  return /^\s*\d+\s+(\p{L}.*)$/u.exec(label.replace(/\s+/g, " ").trim())?.[1]?.trim();
 }
 
 /**
@@ -856,6 +904,15 @@ async function readScalars(
       },
     };
   }
+  for (const field of fields) {
+    if (field.required || !questions[`f_${field.name}`]) continue;
+    const choice = questions[`f_${field.name}`];
+    if (choice?.type !== "choice") continue;
+    questions[`present_${field.name}`] = {
+      type: "noul",
+      instructions: `Task: ${instruction}\nDoes any candidate explicitly state the value of "${fieldText(field)}" as that particular fact? A related number in a name or another field is insufficient. Candidates: ${JSON.stringify(choice.criteria)}`,
+    };
+  }
   // Values that live in one item of a repeated group (a table row, a card) are
   // better read as a record: pick the item, then the part per field.
   const pseudo: ListPlan = {
@@ -950,6 +1007,18 @@ async function readScalars(
         if (mine === undefined || mine === "") data[name] = value;
         else if (!sameValue(mine, value)) problem(trace, `scalar-disagree:${name}`);
       }
+    }
+  }
+
+  for (const field of fields) {
+    const presence = answers[`present_${field.name}`];
+    if (
+      !field.required &&
+      data[field.name] !== undefined &&
+      presence?.type === "noul" &&
+      presence.noul < 0.5
+    ) {
+      delete data[field.name];
     }
   }
 
