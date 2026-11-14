@@ -1,7 +1,17 @@
+import * as extractService from "../../../extension/services/extractService.js";
+import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 import { env } from "node:process";
 import { z } from "zod/v4";
 import { mapCopyExtract, type ScalarReader } from "./mapCopy.js";
-import { cost, decisionConfigs, lunaExtract, withUsage, type Arm, type Usage } from "./replay.js";
+import {
+  cost,
+  gateway,
+  decisionConfigs,
+  lunaExtract,
+  withUsage,
+  type Arm,
+  type Usage,
+} from "./replay.js";
 
 function count(usage: Usage, input: number, output: number) {
   usage.calls++;
@@ -14,7 +24,10 @@ function locateReader(model: string, usage: Usage): ScalarReader {
   return async ({ sheet, fields }) => {
     const response = await fetch("https://api.perplexity.ai/v1/decisions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         model,
         state: sheet,
@@ -24,7 +37,9 @@ function locateReader(model: string, usage: Usage): ScalarReader {
             {
               type: "locate",
               instructions:
-                field.type === "number" ? `${field.instructions}\nReturn the number as written, without surrounding text.` : field.instructions,
+                field.type === "number"
+                  ? `${field.instructions}\nReturn the number as written, without surrounding text.`
+                  : field.instructions,
             },
           ]),
         ),
@@ -37,7 +52,10 @@ function locateReader(model: string, usage: Usage): ScalarReader {
     };
     count(usage, body.usage.input_tokens, body.usage.output_tokens);
     return Object.fromEntries(
-      fields.map((field) => [field.name, body.answers[field.name]?.spans.toSorted((a, b) => b.score - a.score)[0]?.text]),
+      fields.map((field) => [
+        field.name,
+        body.answers[field.name]?.spans.toSorted((a, b) => b.score - a.score)[0]?.text,
+      ]),
     );
   };
 }
@@ -49,19 +67,31 @@ function clairicReader(usage: Usage): ScalarReader {
       `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID!)}/ai/run/@cf/cloudflare/clairic`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${env.CLOUDFLARE_AUTH_TOKEN}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${env.CLOUDFLARE_AUTH_TOKEN}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           model: "clairic",
           state: sheet,
           fields: Object.fromEntries(
-            fields.map((field) => [field.name, { type: field.type === "number" ? "number" : "text", instructions: field.instructions }]),
+            fields.map((field) => [
+              field.name,
+              {
+                type: field.type === "number" ? "number" : "text",
+                instructions: field.instructions,
+              },
+            ]),
           ),
         }),
       },
     );
     if (!response.ok) throw new Error(`clairic HTTP ${response.status}`);
     const body = (await response.json()) as {
-      result: { answers: Record<string, { value: unknown }>; usage: { input_tokens: number; output_tokens: number } };
+      result: {
+        answers: Record<string, { value: unknown }>;
+        usage: { input_tokens: number; output_tokens: number };
+      };
     };
     count(usage, body.result.usage.input_tokens, body.result.usage.output_tokens);
     return Object.fromEntries(
@@ -107,7 +137,11 @@ function normalize(value: unknown): unknown {
   return value;
 }
 
-type Member = { model: keyof typeof decisionConfigs; rate: Arm["rate"]; reader?: (usage: Usage) => ScalarReader };
+type Member = {
+  model: keyof typeof decisionConfigs;
+  rate: Arm["rate"];
+  reader?: (usage: Usage) => ScalarReader;
+};
 
 /**
  * Two independent System One readings run in parallel; the result is accepted
@@ -118,9 +152,20 @@ function agreement(a: Member, b: Member): Arm {
   return {
     rate: "luna",
     run: async (context) => {
-      const usages = [a, b].map((): Usage => ({ calls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }));
+      const usages = [a, b].map((): Usage => ({
+        calls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+      }));
       const readings = await Promise.allSettled(
-        [a, b].map((member, i) => mapCopy(member.model, member.rate, member.reader).run({ ...context, usage: usages[i]!, notes: [] })),
+        [a, b].map((member, i) =>
+          mapCopy(member.model, member.rate, member.reader).run({
+            ...context,
+            usage: usages[i]!,
+            notes: [],
+          }),
+        ),
       );
       let usd = cost(a.rate, usages[0]!) + cost(b.rate, usages[1]!);
       for (const usage of usages) {
@@ -130,13 +175,19 @@ function agreement(a: Member, b: Member): Arm {
       }
       const [x, y] = readings;
       const agreed =
-        x.status === "fulfilled" && y.status === "fulfilled" && JSON.stringify(normalize(x.value)) === JSON.stringify(normalize(y.value));
+        x.status === "fulfilled" &&
+        y.status === "fulfilled" &&
+        JSON.stringify(normalize(x.value)) === JSON.stringify(normalize(y.value));
       if (agreed) {
         context.notes.push({ step: "cascade", decision: "accept" }, { step: "cost", usd });
         return x.value;
       }
       const luna: Usage = { calls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
-      const data = await lunaExtract({ task: context.task, usage: luna }, context.frozen.tree, context.frozen.urlMap);
+      const data = await lunaExtract(
+        { task: context.task, usage: luna },
+        context.frozen.tree,
+        context.frozen.urlMap,
+      );
       usd += cost("luna", luna);
       context.usage.calls += luna.calls;
       context.usage.inputTokens += luna.inputTokens;
@@ -153,7 +204,11 @@ function agreement(a: Member, b: Member): Arm {
  * the verdict reports a problem (two readings disagree, counts fall short,
  * required values are missing) or extraction fails outright.
  */
-function systemOne(model: keyof typeof decisionConfigs, rate: Arm["rate"], locateModel?: string): Arm {
+function systemOne(
+  model: keyof typeof decisionConfigs,
+  rate: Arm["rate"],
+  locateModel?: string,
+): Arm {
   return {
     rate: "luna",
     run: async (context) => {
@@ -165,7 +220,9 @@ function systemOne(model: keyof typeof decisionConfigs, rate: Arm["rate"], locat
       try {
         const result = await mapCopyExtract(withUsage(decisionConfigs[model], own), {
           instruction: context.task.instruction,
-          schema: z.toJSONSchema(context.task.schema) as Parameters<typeof mapCopyExtract>[1]["schema"],
+          schema: z.toJSONSchema(context.task.schema) as Parameters<
+            typeof mapCopyExtract
+          >[1]["schema"],
           tree: context.frozen.tree,
           urlMap: context.frozen.urlMap,
           trace: trace as never[],
@@ -181,14 +238,25 @@ function systemOne(model: keyof typeof decisionConfigs, rate: Arm["rate"], locat
       }
       const ownPassed = data !== undefined && context.task.grade(data) === undefined;
       let usd = cost(rate, own);
-      Object.assign(context.usage, { calls: own.calls, inputTokens: own.inputTokens, outputTokens: own.outputTokens });
-      context.notes.push({ step: "system-one", passed: ownPassed, problems, agree, data }, ...trace);
+      Object.assign(context.usage, {
+        calls: own.calls,
+        inputTokens: own.inputTokens,
+        outputTokens: own.outputTokens,
+      });
+      context.notes.push(
+        { step: "system-one", passed: ownPassed, problems, agree, data },
+        ...trace,
+      );
       if (data && problems.length === 0) {
         context.notes.push({ step: "cascade", decision: "accept" }, { step: "cost", usd });
         return data;
       }
       const luna: Usage = { calls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
-      const fallback = await lunaExtract({ task: context.task, usage: luna }, context.frozen.tree, context.frozen.urlMap);
+      const fallback = await lunaExtract(
+        { task: context.task, usage: luna },
+        context.frozen.tree,
+        context.frozen.urlMap,
+      );
       usd += cost("luna", luna);
       context.usage.calls += luna.calls;
       context.usage.inputTokens += luna.inputTokens;
@@ -205,7 +273,64 @@ const flash: Member = { model: "flash", rate: "flash" };
 const jev: Member = { model: "jev", rate: "jev" };
 
 /** New extraction designs under test; each is compared against the arms in replay.ts. */
+function runtimeMap(model: "decider" | "flash"): Arm {
+  return {
+    rate: model,
+    run: async (context) => {
+      let llmCalls = 0;
+      let decisionRequests = 0;
+      const result = await extractService.extract({
+        params: {
+          pageId: "replay",
+          instruction: context.task.instruction,
+          schema: z.json().parse(z.toJSONSchema(context.task.schema)),
+          options: { cache: false, timeout: 60_000 },
+        },
+        page: {
+          captureSnapshot: async () => ({
+            combinedTree: context.frozen.tree,
+            combinedXpathMap: context.frozen.xpathMap,
+            combinedUrlMap: context.frozen.urlMap,
+          }),
+          screenshot: async () => new Uint8Array(),
+        },
+        model: { source: "client" },
+        decisions: {
+          ...decisionConfigs[model],
+          extract: "map",
+          recordDecisionUsage: () => {
+            decisionRequests++;
+            context.usage.calls++;
+          },
+        },
+        clientLLMGenerate: (params) => {
+          llmCalls++;
+          context.usage.calls++;
+          return generateWithOpenAI(gateway, env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna", params);
+        },
+        logger: context.logger,
+      });
+      Object.assign(context.usage, {
+        inputTokens: result.metadata.usage.inputTokens,
+        outputTokens: result.metadata.usage.outputTokens,
+        cachedInputTokens: result.metadata.usage.cachedInputTokens,
+      });
+      context.notes.push({
+        step: "cascade",
+        decision: llmCalls ? "escalate" : "accept",
+        decisionRequests,
+        llmCalls,
+      });
+      // Mixed-provider costs require per-provider rates; this arm measures usage and correctness.
+      context.notes.push({ step: "cost", usd: null });
+      return result.data;
+    },
+  };
+}
+
 export const extraArms: Record<string, Arm> = {
+  "runtime-decider": runtimeMap("decider"),
+  "runtime-flash": runtimeMap("flash"),
   "s1-decider": systemOne("decider", "decider", "pplx-decider-latest"),
   "s1-flash": systemOne("flash", "flash", "pplx-decider-flash-latest"),
   "s1-jev": systemOne("jev", "jev"),
@@ -219,7 +344,11 @@ export const extraArms: Record<string, Arm> = {
   "map-clef": mapCopy("clef", "clef"),
   "map-decider": mapCopy("decider", "decider"),
   "map-flash": mapCopy("flash", "flash"),
-  "map-decider-locate": mapCopy("decider", "decider", (usage) => locateReader("pplx-decider-latest", usage)),
-  "map-flash-locate": mapCopy("flash", "flash", (usage) => locateReader("pplx-decider-flash-latest", usage)),
+  "map-decider-locate": mapCopy("decider", "decider", (usage) =>
+    locateReader("pplx-decider-latest", usage),
+  ),
+  "map-flash-locate": mapCopy("flash", "flash", (usage) =>
+    locateReader("pplx-decider-flash-latest", usage),
+  ),
   "map-clef-clairic": mapCopy("clef", "clef", clairicReader),
 };

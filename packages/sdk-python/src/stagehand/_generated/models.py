@@ -657,6 +657,7 @@ class Extract(StrEnum):
     judge = "judge"
     pick = "pick"
     native = "native"
+    map = "map"
 
 
 class ExtractOptions(WireModel):

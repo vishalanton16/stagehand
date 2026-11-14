@@ -115,7 +115,7 @@ export async function extractWithDecider({
 }: {
   params: StagehandExtractParams;
   page: Pick<Page, "captureSnapshot">;
-  model: { apiKey: string; modelName: string };
+  model: { apiKey: string; modelName: string; apiUrl?: string; timeoutMs?: number };
   systemPrompt: string;
   progress: Progress;
   recordUsage?: (usage: StagehandResultUsage) => void;
@@ -145,12 +145,18 @@ export async function extractWithDecider({
 
   const started = performance.now();
   const result = await progress.run("waiting for Decider inference", async () => {
-    const response = await fetch("https://api.perplexity.ai/v1/decisions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${model.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: model.modelName, state, questions }),
-      signal: progress.signal,
-    });
+    const response = await fetch(
+      `${(model.apiUrl ?? "https://api.perplexity.ai").replace(/\/+$/, "")}/v1/decisions`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${model.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: model.modelName, state, questions }),
+        signal:
+          model.timeoutMs === undefined
+            ? progress.signal
+            : AbortSignal.any([progress.signal, AbortSignal.timeout(model.timeoutMs)]),
+      },
+    );
     if (!response.ok)
       throw new Error(`Perplexity Decider request failed (HTTP ${response.status})`);
     return responseSchema.parse(await response.json());

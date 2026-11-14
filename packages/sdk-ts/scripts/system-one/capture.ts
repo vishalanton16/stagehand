@@ -2,18 +2,28 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { localBrowser, Stagehand } from "../../src/index.js";
-import { tasks as devTasks } from "./corpus.js";
+import * as corpus from "./corpus.js";
 import { heldoutTasks } from "./heldout.js";
 import { heldout2Tasks } from "./heldout2.js";
 import { heldout3Tasks } from "./heldout3.js";
 import { heldout4Tasks } from "./heldout4.js";
 
-const tasks = [...devTasks, ...heldoutTasks, ...heldout2Tasks, ...heldout3Tasks, ...heldout4Tasks];
+import { heldout5Tasks } from "./heldout5.js";
+
+const tasks = [
+  ...corpus.tasks,
+  ...heldoutTasks,
+  ...heldout2Tasks,
+  ...heldout3Tasks,
+  ...heldout4Tasks,
+  ...heldout5Tasks,
+];
 
 export const CORPUS_DIR = new URL("../../../../vendor-repos/system-one-corpus/", import.meta.url);
 
 const EVAL_ORIGIN = "https://stagehand-eval-sites.vercel.app";
-const CHALLENGE = /Vercel Security Checkpoint|Just a moment|security verification/i;
+const CHALLENGE =
+  /Vercel Security Checkpoint|Just a moment|security verification|Too Many Requests/i;
 
 const normalize = (xpath: string) => xpath.replaceAll("[1]", "").replace(/\/$/, "");
 
@@ -105,9 +115,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
               ...snapshot,
             }),
           );
-          console.log(task.name, tree.length, "chars");
+          process.stdout.write(`${task.name} ${tree.length} chars\n`);
         } catch (error) {
-          console.log(task.name, "FAILED", error instanceof Error ? error.message : error);
+          process.stderr.write(
+            `${task.name} FAILED ${error instanceof Error ? error.message : String(error)}\n`,
+          );
+          process.exitCode = 1;
         }
       }
     } finally {

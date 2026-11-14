@@ -1,3 +1,5 @@
+import { mapCopyExtract } from "./decisions/mapCopy.js";
+import { scalarReader } from "./decisions/scalarReader.js";
 import { extractWithClairic } from "./decisions/clairic.js";
 import { extractWithDecider } from "./decisions/decider.js";
 import { TimeoutError } from "../errors.js";
@@ -81,14 +83,17 @@ async function extractWithProgress(
 ): Promise<ExtractResult> {
   const { instruction, options } = params;
   if (decisions) {
+    const recordDecisionUsage = decisions.recordDecisionUsage;
     decisions = {
       ...decisions,
       signal: progress.signal,
-      recordDecisionUsage: (usage) =>
+      recordDecisionUsage: (usage) => {
+        recordDecisionUsage?.(usage);
         logger.info("Decision model usage", {
           category: "decisions-usage",
           ...usage,
-        }),
+        });
+      },
     };
   }
 
@@ -183,6 +188,74 @@ async function extractWithProgress(
 
     const schema = z.fromJSONSchema(params.schema as Parameters<typeof z.fromJSONSchema>[0]);
 
+    if (decisions?.extract === "map" && instruction && !screenshot) {
+      const started = performance.now();
+      let decisionRequests = 0;
+      const trace: Parameters<typeof mapCopyExtract>[1]["trace"] = [];
+      const config = {
+        ...decisions,
+        recordDecisionUsage: (usage: { inputTokens: number; outputTokens: number }) => {
+          decisionRequests++;
+          nativeUsage.inputTokens += usage.inputTokens;
+          nativeUsage.outputTokens += usage.outputTokens;
+          decisions?.recordDecisionUsage?.(usage);
+        },
+      };
+      let reason = "unresolved";
+      try {
+        const outcome = await progress.run("mapping extraction evidence", () =>
+          mapCopyExtract(config, {
+            instruction,
+            schema: params.schema as Parameters<typeof mapCopyExtract>[1]["schema"],
+            tree: combinedTree,
+            urlMap: (combinedUrlMap ?? {}) as Record<string, string>,
+            reader: scalarReader(config, progress),
+            readerChecks: true,
+            verify: true,
+            askVerifier: false,
+            trace,
+          }),
+        );
+        progress.throwIfStopped();
+        const valid = schema.safeParse(outcome.data);
+        const problems = outcome.verdict?.problems ?? ["missing_verdict"];
+        nativeUsage.inferenceTimeMs = Math.round(performance.now() - started);
+        if (valid.success && problems.length === 0) {
+          logger.info("System One extraction accepted", {
+            category: "decisions",
+            decisionRequests,
+          });
+          logger.debug("System One extraction trace", {
+            category: "decisions",
+            trace: JSON.stringify(trace),
+          });
+          return {
+            result: {
+              data: z.json().parse(valid.data),
+              metadata: { usage: nativeUsage, cache: disabledCacheMetadata() },
+            },
+            cacheValue: valid.data,
+          };
+        }
+        reason = valid.success ? problems.join(",") : "schema_mismatch";
+      } catch (error) {
+        progress.throwIfStopped();
+        reason = error instanceof Error ? error.message : String(error);
+      }
+      nativeUsage.inferenceTimeMs = Math.round(performance.now() - started);
+      logger.info("System One extraction fell back to the LLM", {
+        category: "decisions",
+        reason,
+        decisionRequests,
+      });
+      logger.debug("System One extraction trace", {
+        category: "decisions",
+        trace: JSON.stringify(trace),
+      });
+      if (decisions.llmFallback === false)
+        throw new Error(`System One extraction abstained (${reason})`);
+    }
+
     // Pick-and-copy: the decision model chooses the elements that hold the values, code copies
     // their text. Screenshot-based extraction stays with the LLM.
     if (decisions?.extract === "pick" && instruction && !screenshot) {
@@ -247,9 +320,20 @@ async function extractWithProgress(
           progress.run("waiting for extract inference", () =>
             llmService.generate(model, input, clientLLMGenerate, gateway),
           ),
-        userProvidedInstructions: systemPrompt,
+        userProvidedInstructions:
+          decisions?.extract === "map"
+            ? [
+                systemPrompt,
+                "For optional fields, omit the field when the supplied page does not contain the requested fact. Absence is not zero. Return zero only when the page explicitly reports zero for that fact. Do not infer values from outside knowledge.",
+              ]
+                .filter(Boolean)
+                .join("\n")
+            : systemPrompt,
         screenshot: screenshotContent,
-        ...(decisions && decisions.extract !== "native" && instruction
+        ...(decisions &&
+        decisions.extract !== "native" &&
+        decisions.extract !== "map" &&
+        instruction
           ? {
               judgeCompleted: async (extracted: unknown) => {
                 const trace: Record<string, unknown>[] = [];

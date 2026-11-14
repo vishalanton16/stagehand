@@ -1532,7 +1532,7 @@ export const ExperimentalDecisionsConfigSchema = z
     retryNoEffect: z.boolean().optional(),
     focusFallback: z.boolean().optional(),
     cacheCheck: z.boolean().optional(),
-    extract: z.enum(["judge", "pick", "native"]).optional(),
+    extract: z.enum(["judge", "pick", "native", "map"]).optional(),
     actConfidence: z.number().min(0).max(1).optional(),
     verify: z.enum(["off", "checks", "full"]).optional(),
     llmFallback: z.boolean().optional(),

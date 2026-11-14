@@ -6,7 +6,10 @@
  *
  * REPLAY_ARMS, REPLAY_TASKS (comma lists), REPLAY_ROUNDS, REPLAY_CONCURRENCY.
  */
-import { readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { trace } from "@opentelemetry/api";
 import OpenAI from "openai";
 import { z } from "zod/v4";
@@ -25,13 +28,23 @@ import { runWithProgress } from "../../../extension/understudy/progress.js";
 import { injectUrls, transformSchema } from "../../../extension/utils.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 import { CORPUS_DIR } from "./capture.js";
-import { tasks as devTasks, type CorpusTask } from "./corpus.js";
+import * as corpus from "./corpus.js";
+import type { CorpusTask } from "./corpus.js";
 import { heldoutTasks } from "./heldout.js";
 import { heldout2Tasks } from "./heldout2.js";
 import { heldout3Tasks } from "./heldout3.js";
 import { heldout4Tasks } from "./heldout4.js";
 
-const tasks = [...devTasks, ...heldoutTasks, ...heldout2Tasks, ...heldout3Tasks, ...heldout4Tasks];
+import { heldout5Tasks } from "./heldout5.js";
+
+const tasks = [
+  ...corpus.tasks,
+  ...heldoutTasks,
+  ...heldout2Tasks,
+  ...heldout3Tasks,
+  ...heldout4Tasks,
+  ...heldout5Tasks,
+];
 import { extraArms } from "./arms.js";
 
 const env = process.env;
@@ -43,7 +56,12 @@ export type Frozen = {
   urlMap: Record<string, string>;
 };
 
-export type Usage = { calls: number; inputTokens: number; outputTokens: number; cachedInputTokens: number };
+export type Usage = {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+};
 
 export type ArmContext = {
   task: CorpusTask;
@@ -78,7 +96,11 @@ export const decisionConfigs = {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     model: "clef-flash",
   },
-  decider: { provider: "perplexity", apiKey: env.PERPLEXITY_API_KEY!, model: "pplx-decider-latest" },
+  decider: {
+    provider: "perplexity",
+    apiKey: env.PERPLEXITY_API_KEY!,
+    model: "pplx-decider-latest",
+  },
   flash: {
     provider: "perplexity",
     apiKey: env.PERPLEXITY_API_KEY!,
@@ -97,7 +119,7 @@ export function withUsage(config: DecisionModelConfig, usage: Usage): DecisionMo
   };
 }
 
-const gateway = new OpenAI({
+export const gateway = new OpenAI({
   baseURL: env.AI_GATEWAY_BASE_URL ?? "https://ai-gateway.vercel.sh/v1",
   apiKey: env.AI_GATEWAY_API_KEY,
   maxRetries: 1,
@@ -108,10 +130,17 @@ export async function lunaExtract(
   { task, usage }: Pick<ArmContext, "task" | "usage">,
   domElements: string,
   urlMap: Record<string, string>,
+  guardMissing = true,
 ): Promise<unknown> {
   const [schema, urlPaths] = transformSchema(task.schema, []);
   const response = await inference.extract({
     instruction: task.instruction,
+    ...(guardMissing
+      ? {
+          userProvidedInstructions:
+            "For optional fields, omit the field when the supplied page does not contain the requested fact. Absence is not zero. Return zero only if the page explicitly reports zero for that fact. Do not infer values from outside knowledge.",
+        }
+      : {}),
     domElements,
     schema: schema as typeof task.schema,
     generate: (input) =>
@@ -122,8 +151,15 @@ export async function lunaExtract(
         usage.cachedInputTokens += tokens.cachedInputTokens ?? 0;
       }),
   });
-  const { metadata: _m, prompt_tokens: _p, completion_tokens: _c, reasoning_tokens: _r, cached_input_tokens: _ci, inference_time_ms: _t, ...data } =
-    response as Record<string, unknown>;
+  const {
+    metadata: _m,
+    prompt_tokens: _p,
+    completion_tokens: _c,
+    reasoning_tokens: _r,
+    cached_input_tokens: _ci,
+    inference_time_ms: _t,
+    ...data
+  } = response as Record<string, unknown>;
   for (const { segments } of urlPaths) injectUrls(data, segments, urlMap);
   return data;
 }
@@ -168,7 +204,8 @@ function nativeExtract(provider: "clairic" | "locate" | "flash") {
             ...common,
             model: {
               apiKey: env.PERPLEXITY_API_KEY!,
-              modelName: provider === "locate" ? "pplx-decider-latest" : "pplx-decider-flash-latest",
+              modelName:
+                provider === "locate" ? "pplx-decider-latest" : "pplx-decider-flash-latest",
             },
           } as Parameters<typeof extractWithDecider>[0]);
     });
@@ -193,7 +230,14 @@ function pickExtract(model: keyof typeof decisionConfigs) {
 }
 
 export const arms: Record<string, Arm> = {
-  luna: { rate: "luna", run: (context) => lunaExtract(context, context.frozen.tree, context.frozen.urlMap) },
+  luna: {
+    rate: "luna",
+    run: (context) => lunaExtract(context, context.frozen.tree, context.frozen.urlMap, false),
+  },
+  "luna-guarded": {
+    rate: "luna",
+    run: (context) => lunaExtract(context, context.frozen.tree, context.frozen.urlMap),
+  },
   "pick-jev": { rate: "jev", run: pickExtract("jev") },
   "pick-clef": { rate: "clef", run: pickExtract("clef") },
   "pick-decider": { rate: "decider", run: pickExtract("decider") },
@@ -219,21 +263,78 @@ export function loadFrozen(name: string): Frozen {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const logger = new StagehandLogger({ tracer: trace.getTracer("replay") }, () => {}, undefined, "off");
+  const logger = new StagehandLogger(
+    { tracer: trace.getTracer("replay") },
+    () => {},
+    undefined,
+    "off",
+  );
   const armNames = env.REPLAY_ARMS?.split(",") ?? Object.keys(arms);
   const taskNames = env.REPLAY_TASKS?.split(",");
   const rounds = Number(env.REPLAY_ROUNDS ?? 1);
   const concurrency = Number(env.REPLAY_CONCURRENCY ?? 6);
+  for (const [name, value] of Object.entries({ rounds, concurrency })) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Invalid ${name}: ${value}`);
+  }
+  for (const name of taskNames ?? []) {
+    if (!tasks.some((task) => task.name === name)) throw new Error(`Unknown task ${name}`);
+  }
+  for (const name of armNames) {
+    if (!arms[name]) throw new Error(`Unknown arm ${name}`);
+  }
+  const selectedTasks = tasks.filter((task) => !taskNames || taskNames.includes(task.name));
+  const snapshots = new Map(selectedTasks.map((task) => [task.name, loadFrozen(task.name)]));
+  const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
+  const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const sourcePaths = execFileSync(
+    "git",
+    [
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "packages/extension",
+      "packages/sdk-ts/scripts",
+      "packages/protocol",
+      "pnpm-lock.yaml",
+    ],
+    { encoding: "utf8" },
+  )
+    .trim()
+    .split("\n")
+    .filter(Boolean);
+  const sources = Object.fromEntries(
+    [...new Set(sourcePaths)].sort().map((path) => [path, readFileSync(path).toString("base64")]),
+  );
+  const sourceHash = hash(JSON.stringify(sources));
+  const run = {
+    id: randomUUID(),
+    startedAt: new Date().toISOString(),
+    revision,
+    sourceHash,
+    sourceEncoding: "base64",
+    dirty: execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim().length > 0,
+    rounds,
+    concurrency,
+    tasks: selectedTasks.map((task) => task.name),
+    arms: armNames,
+    fallbackModel: env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna",
+  };
+  const archive = new URL(`runs/archive/${run.id}/`, CORPUS_DIR);
+  mkdirSync(archive, { recursive: true });
+  writeFileSync(new URL("manifest.json", archive), JSON.stringify(run, null, 2) + "\n");
+  writeFileSync(new URL("sources.json.gz", archive), gzipSync(JSON.stringify(sources)));
+  writeFileSync(
+    new URL("snapshots.json.gz", archive),
+    gzipSync(JSON.stringify(Object.fromEntries(snapshots))),
+  );
+  process.stderr.write(JSON.stringify({ run }) + "\n");
   const jobs: (() => Promise<void>)[] = [];
   for (let round = 0; round < rounds; round++) {
     for (const task of tasks) {
       if (taskNames && !taskNames.includes(task.name)) continue;
-      let frozen: Frozen;
-      try {
-        frozen = loadFrozen(task.name);
-      } catch {
-        continue;
-      }
+      const frozen = snapshots.get(task.name)!;
+      const snapshotHash = hash(JSON.stringify(frozen));
       for (const armName of armNames) {
         const arm = arms[armName];
         if (!arm) throw new Error(`Unknown arm ${armName}`);
@@ -243,14 +344,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
           let data: unknown;
           let error: string | undefined;
           const notes: unknown[] = [];
+          const runLogger = new StagehandLogger(logger.tracing, (event) => {
+            if (event.data.category === "decisions" || event.data.category === "decisions-usage")
+              notes.push(event);
+          });
           try {
-            data = await arm.run({ task, frozen, usage, logger, notes });
+            data = await arm.run({ task, frozen, usage, logger: runLogger, notes });
           } catch (err) {
             error = (err instanceof Error ? err.message : String(err)).slice(0, 300);
           }
           const failure = error ?? task.grade(data ?? {});
-          process.stdout.write(
+          const line =
             JSON.stringify({
+              run,
+              snapshotHash,
               task: task.name,
               kind: task.kind,
               arm: armName,
@@ -261,11 +368,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
               ms: Math.round(performance.now() - start),
               treeChars: frozen.tree.length,
               usage,
-              usd: (notes.find((note) => (note as { step?: string })?.step === "cost") as { usd?: number } | undefined)?.usd ?? cost(arm.rate, usage),
+              usd: armName.startsWith("runtime-")
+                ? null
+                : ((
+                    notes.find((note) => (note as { step?: string })?.step === "cost") as
+                      | { usd?: number }
+                      | undefined
+                  )?.usd ?? cost(arm.rate, usage)),
               data,
               notes,
-            }) + "\n",
-          );
+            }) + "\n";
+          appendFileSync(new URL("results.jsonl", archive), line);
+          process.stdout.write(line);
         });
       }
     }

@@ -1504,7 +1504,7 @@
         },
         "extract": {
           "type": "string",
-          "enum": ["judge", "pick", "native"]
+          "enum": ["judge", "pick", "native", "map"]
         },
         "act_confidence": {
           "type": "number",

@@ -257,7 +257,7 @@ class ExperimentalDecisionsConfig(TypedDict):
     retry_no_effect: NotRequired[bool]
     focus_fallback: NotRequired[bool]
     cache_check: NotRequired[bool]
-    extract: NotRequired[Literal["judge", "pick", "native"]]
+    extract: NotRequired[Literal["judge", "pick", "native", "map"]]
     act_confidence: NotRequired[float]
     verify: NotRequired[Literal["off", "checks", "full"]]
     llm_fallback: NotRequired[bool]
