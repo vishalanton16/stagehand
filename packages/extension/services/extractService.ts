@@ -58,6 +58,7 @@ type ExtractServiceOptions = {
   gateway?: GatewayContext;
   decisions?: DecisionsConfig;
   progress?: Progress;
+  speculateListMapping?: boolean;
 };
 
 export async function extract(options: ExtractServiceOptions): Promise<ExtractResult> {
@@ -78,6 +79,7 @@ async function extractWithProgress(
     cache,
     gateway,
     decisions,
+    speculateListMapping,
   }: ExtractServiceOptions,
   progress: Progress,
 ): Promise<ExtractResult> {
@@ -213,6 +215,7 @@ async function extractWithProgress(
             readerChecks: true,
             verify: true,
             askVerifier: false,
+            speculateListMapping,
             trace,
           }),
         );

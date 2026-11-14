@@ -112,32 +112,39 @@ const extensionHash = createHash("sha256")
 const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 let failures = 0;
 const browser = await localBrowser.launch({ headless: true });
+const arms = (process.env.LIVE_ARMS ?? "decider,luna").split(",");
+const rounds = Number(process.env.LIVE_ROUNDS ?? 2);
 try {
-  for (const arm of (process.env.LIVE_ARMS ?? "decider,luna").split(",")) {
-    const logs: unknown[] = [];
-    const stagehand = await Stagehand.create({
-      browser,
-      model: {
-        generate: (params) =>
-          generateWithOpenAI(gateway, process.env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna", params),
-      },
-      experimentalDecisions: {
-        provider: "perplexity",
-        apiKey: process.env.PERPLEXITY_API_KEY!,
-        model: arm === "flash" ? "pplx-decider-flash-latest" : "pplx-decider-latest",
-        extract: "map",
-      },
-      logging: {
-        level: "info",
-        onLog: (event) => {
-          if (event.data.category === "decisions" || event.data.category === "decisions-usage")
-            logs.push(event);
+  for (let round = 0; round < rounds; round++) {
+    const offset = round % arms.length;
+    for (const arm of [...arms.slice(offset), ...arms.slice(0, offset)]) {
+      const logs: unknown[] = [];
+      const stagehand = await Stagehand.create({
+        browser,
+        model: {
+          generate: (params) =>
+            generateWithOpenAI(
+              gateway,
+              process.env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna",
+              params,
+            ),
         },
-      },
-    });
-    try {
-      const page = await browser.context.newPage();
-      for (let round = 0; round < Number(process.env.LIVE_ROUNDS ?? 2); round++) {
+        experimentalDecisions: {
+          provider: "perplexity",
+          apiKey: process.env.PERPLEXITY_API_KEY!,
+          model: arm === "flash" ? "pplx-decider-flash-latest" : "pplx-decider-latest",
+          extract: "map",
+        },
+        logging: {
+          level: "info",
+          onLog: (event) => {
+            if (event.data.category === "decisions" || event.data.category === "decisions-usage")
+              logs.push(event);
+          },
+        },
+      });
+      try {
+        const page = await browser.context.newPage();
         for (const task of realTasks ?? cases) {
           const url = "url" in task ? task.url : `http://127.0.0.1:${address.port}/${task.name}`;
           logs.length = 0;
@@ -189,10 +196,10 @@ try {
             }) + "\n",
           );
         }
+        await page.close();
+      } finally {
+        await stagehand.close();
       }
-      await page.close();
-    } finally {
-      await stagehand.close();
     }
   }
 } finally {

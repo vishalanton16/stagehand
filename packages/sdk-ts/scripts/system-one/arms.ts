@@ -273,7 +273,7 @@ const flash: Member = { model: "flash", rate: "flash" };
 const jev: Member = { model: "jev", rate: "jev" };
 
 /** New extraction designs under test; each is compared against the arms in replay.ts. */
-function runtimeMap(model: "decider" | "flash"): Arm {
+function runtimeMap(model: "decider" | "flash", speculateListMapping = false): Arm {
   return {
     rate: model,
     run: async (context) => {
@@ -309,6 +309,7 @@ function runtimeMap(model: "decider" | "flash"): Arm {
           return generateWithOpenAI(gateway, env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna", params);
         },
         logger: context.logger,
+        speculateListMapping,
       });
       Object.assign(context.usage, {
         inputTokens: result.metadata.usage.inputTokens,
@@ -330,6 +331,7 @@ function runtimeMap(model: "decider" | "flash"): Arm {
 
 export const extraArms: Record<string, Arm> = {
   "runtime-decider": runtimeMap("decider"),
+  "runtime-decider-speculative": runtimeMap("decider", true),
   "runtime-flash": runtimeMap("flash"),
   "s1-decider": systemOne("decider", "decider", "pplx-decider-latest"),
   "s1-flash": systemOne("flash", "flash", "pplx-decider-flash-latest"),

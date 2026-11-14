@@ -84,3 +84,53 @@ Both decision models fell back on curl's protocol list. Decider twice used the n
 The scoped-filter version passed **98/98** seen replays with **80** direct accepts, **18** fallbacks, and **zero** wrong accepts. Replay p50/p95 was 4.67/14.78 s. That run is archived under `runs/archive/e312cf85-675f-45bd-9d30-800ef8bf7d6e/`.
 
 Both arms passed the live public SDK smoke check on nginx and curl. Decider accepted both directly. End-to-end times were 7.13/8.59 s for Decider and 5.00/5.92 s for Luna, in nginx/curl order. See `runs/plan-validation/stagehand-held6-live.jsonl`. The separate first nginx comparison is preserved under `runs/archive/a283132a-fda1-4156-9c6b-1cca3a633ee8/`. GNU Make was excluded from that check after navigation timed out.
+
+### Overlap list group selection with field mapping
+
+Commit `a14844c46` contains the coverage, optional-evidence, and group-scope fixes. The new replay arm `runtime-decider-speculative` starts field and scope mapping for the top-ranked candidate while the existing decision call selects the group. It uses the early response only when selection chooses that same group. Group agreement, field validation, and fallback still apply. The public SDK uses the sequential path.
+
+| Eight list pages, two rounds | Passed | Wrong accepts |    p50 |     p95 | Mean calls | Mean input tokens |
+| ---------------------------- | -----: | ------------: | -----: | ------: | ---------: | ----------------: |
+| Sequential Decider           |  16/16 |             0 | 4.59 s | 10.97 s |       2.25 |             3,312 |
+| Speculative Decider          |  16/16 |             0 | 3.23 s |  6.99 s |       2.88 |             4,024 |
+| Luna                         |  15/16 |             — | 5.64 s |  9.76 s |       2.00 |            37,693 |
+
+All Decider runs answered directly. Early work matched the selected group in six runs, with 19 ms median wait remaining after selection. Ten runs mapped another group. The sample comprises regression pages and measures frozen replay. See `runs/archive/1fdebce5-3df6-40a5-8295-2a309097b140/`.
+
+| Full seen replay                               | Sequential | Speculative |
+| ---------------------------------------------- | ---------: | ----------: |
+| Passed                                         |      98/98 |       98/98 |
+| Wrong accepts                                  |          0 |           0 |
+| Fallbacks                                      |         20 |          19 |
+| p50 latency                                    |     4.58 s |      3.54 s |
+| p95 latency                                    |    12.56 s |     12.53 s |
+| Mean completed model calls, including fallback |       2.59 |        2.71 |
+| Mean input tokens                              |      9,963 |      10,239 |
+
+On the 56 list runs per arm, p50 fell from 5.18 s to 3.65 s. Both arms used fallback eight times, and 44 of 56 early mappings matched the selected group. This replay supports a median latency improvement. The full-set tail was effectively flat and the smaller list sample needed more extra requests. Keep the optimization replay-only until a paired live check measures tail latency and the overhead of guessing the wrong group. Full replay archive: `runs/archive/da23a4cb-e8b4-420d-8c18-69d892ea1aed/`.
+
+### One request for group and field selection
+
+A replay experiment included the group questions and field mappings for the two highest-ranked groups in one request. The existing group check still decided which answers to use. A separate variant moved repeated record previews into shared request state.
+
+| Eight list pages, two rounds | Passed | Wrong accepts |    p50 |     p95 | Mean calls | Mean input tokens |
+| ---------------------------- | -----: | ------------: | -----: | ------: | ---------: | ----------------: |
+| Sequential Decider           |  16/16 |             0 | 1.00 s |  2.99 s |       2.25 |             3,312 |
+| Bundled Decider              |  16/16 |             0 | 1.76 s |  2.72 s |       1.88 |             7,944 |
+| Sequential Flash             |  14/16 |             2 | 0.86 s |  8.02 s |       2.50 |             3,951 |
+| Bundled Flash                |  14/16 |             2 | 0.95 s |  8.41 s |       2.12 |             8,583 |
+| Luna                         |  16/16 |             — | 5.37 s | 10.85 s |       2.00 |            37,690 |
+
+The selected group was among the two bundled candidates in six of 16 runs per decision model. The larger first request and the remaining sequential requests erased the expected median latency gain. The shared-preview variant scored 14/16 against 16/16 for its sequential Decider control, with two Everest alias wrong accepts. Both bundling variants were removed from the working implementation. Their code and results are preserved in replay archives `09c4bc8c-877c-4aa7-98a6-53ea34bffa54` and `3ffbb83a-ffcb-4901-b9c9-45e6dd1d7d7a`.
+
+### Live latency with rotated model order
+
+The live runner now rotates model order each round. Five real pages ran three times per arm, including the curl manual, nginx tables, Rust types, Mars figures, and the textbook title. These pages were already used in development.
+
+| Public SDK arm     | Passed | Fallbacks | Extract p50 / p95 | End-to-end p50 / p95 | Mean input tokens |
+| ------------------ | -----: | --------: | ----------------- | -------------------- | ----------------: |
+| Sequential Decider |  15/15 |         0 | 1.02 / 2.93 s     | 1.43 / 3.12 s        |             3,283 |
+| Sequential Flash   |  15/15 |         3 | 0.75 / 6.57 s     | 1.39 / 7.70 s        |             5,508 |
+| Luna               |  15/15 |         — | 4.50 / 5.98 s     | 5.02 / 8.57 s        |            37,316 |
+
+The earlier three-page live check had end-to-end p95 of 10.86 s for Decider and 4.48 s for Luna. The new run used a different page subset and provider session. It confirms Decider can beat Luna on these five pages and leaves cross-session tail latency open. Fifteen samples per arm make nearest-rank p95 the maximum observed time. All three Flash fallbacks came from the textbook title's scalar disagreement. Results are in `runs/plan-validation/stagehand-rotated-live.jsonl`.

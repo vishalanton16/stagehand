@@ -144,3 +144,45 @@ it("omits an optional number when its candidate does not explicitly state the fi
   );
   expect(result.data).toEqual({ title: "Example Product 2.0" });
 });
+
+it("starts speculative field mapping before group selection completes", async () => {
+  const mappingStarted = Promise.withResolvers<void>();
+  let calls = 0;
+  vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => {
+    calls++;
+    if (questions.group) await mappingStarted.promise;
+    if (questions.f_items) mappingStarted.resolve();
+    return {
+      model: "test",
+      answers: Object.fromEntries(
+        Object.entries(questions).map(([key, question]) => {
+          if (question.type === "noul")
+            return [key, { type: "noul", noul: key.startsWith("is_") ? 1 : 0 }];
+          const choice = Object.keys(question.criteria)[0]!;
+          return [key, { type: "choice", choice, probabilities: { [choice]: 1 }, confidence: 1 }];
+        }),
+      ),
+      usage: { inputTokens: 1, outputTokens: 1 },
+      durationMs: 1,
+    };
+  });
+  const outcome = await mapCopyExtract(
+    { apiKey: "test" },
+    {
+      instruction: "Extract every item.",
+      schema: {
+        type: "object",
+        required: ["items"],
+        properties: { items: { type: "array", items: { type: "string" } } },
+      },
+      tree: "[0-1] list\n  [0-2] listitem: Bronze\n  [0-3] listitem: Silver\n  [0-4] listitem: Gold",
+      urlMap: {},
+      speculateListMapping: true,
+      verify: true,
+      askVerifier: false,
+    },
+  );
+  expect(outcome.data.items).toEqual(["Bronze", "Silver", "Gold"]);
+  expect(outcome.verdict?.problems).toEqual([]);
+  expect(calls).toBe(2);
+});

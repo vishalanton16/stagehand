@@ -371,65 +371,7 @@ function describeSlot(slot: Slot, field?: Field): string {
   return `${slot.label ? `column "${slot.label}", ` : ""}e.g. ${samples}${sparse}`;
 }
 
-async function readList(
-  config: DecisionModelConfig,
-  view: DataView,
-  list: ListPlan,
-  instruction: string,
-  trace: TraceEntry[],
-): Promise<unknown[] | undefined> {
-  const groups = rankGroups(view, list, instruction);
-  if (groups.length === 0) return undefined;
-  const want = list.fields.map(fieldText).join(", ");
-  const listName = list.name.replaceAll("_", " ");
-  // The same choice asked a second way: each group on its own, as a yes/no
-  // question the model answers in isolation from the multiple choice.
-  const first = await ask(
-    config,
-    { task: instruction },
-    {
-      group: {
-        type: "choice",
-        instructions: `Task: ${instruction}\nWhich group of repeated page items is the "${listName}" list? Each item must provide: ${want}.`,
-        criteria: {
-          ...Object.fromEntries(groups.map((group) => [group.id, describeGroup(view, group)])),
-          [NONE]: "None of these groups",
-        },
-      },
-      ...Object.fromEntries(
-        groups.map((group) => [
-          `is_${group.id}`,
-          {
-            type: "noul",
-            instructions: `Task: ${instruction}\nAre these repeated page items the "${listName}" list (each item provides: ${want})? ${describeGroup(view, group)}`,
-          } satisfies DecisionQuestion,
-        ]),
-      ),
-    },
-  );
-  const picked = choiceOf(first.answers, "group", trace, `${list.name}:group`, groups.length + 1);
-  const group = groups.find((candidate) => candidate.id === picked.choice);
-  const pointwise = groups.map((candidate) => ({
-    id: candidate.id,
-    yes: noulOf(first.answers, `is_${candidate.id}`),
-  }));
-  const best = pointwise.toSorted((a, b) => b.yes - a.yes)[0];
-  trace.push({
-    step: `${list.name}:group-pointwise`,
-    choice: best?.id ?? NONE,
-    confidence: best?.yes ?? 0,
-    options: groups.length,
-  });
-  if (group && best && (best.id !== group.id || best.yes < 0.5))
-    problem(trace, `group-disagree:${list.name}`);
-  if (!group) return undefined;
-  trace.push({
-    step: `${list.name}:page-items`,
-    choice: String(group.records.length),
-    confidence: 0,
-    options: 0,
-  });
-
+function buildListMapping(view: DataView, list: ListPlan, instruction: string, group: Group) {
   const hasNumericField = list.fields.some(
     (field) => field.type === "number" || field.type === "integer",
   );
@@ -509,14 +451,107 @@ async function readList(
     }
   }
   const preview = group.records.slice(0, 3).map((record) => recordText(view, record, 300));
-  const second = await ask(config, { task: instruction, items: preview }, questions);
+  return { slotOptions, counts, sections, bySection, preview, questions };
+}
+
+async function readList(
+  config: DecisionModelConfig,
+  view: DataView,
+  list: ListPlan,
+  instruction: string,
+  trace: TraceEntry[],
+  speculateListMapping: boolean,
+): Promise<unknown[] | undefined> {
+  const groups = rankGroups(view, list, instruction);
+  if (groups.length === 0) return undefined;
+  const groupStarted = performance.now();
+  const candidate = groups[0]!;
+  const speculative = speculateListMapping
+    ? (() => {
+        const mapping = buildListMapping(view, list, instruction, candidate);
+        return {
+          mapping,
+          response: ask(config, { task: instruction, items: mapping.preview }, mapping.questions),
+        };
+      })()
+    : undefined;
+  // The group answer can reject this candidate. Observe its failure immediately.
+  void speculative?.response.catch(() => {});
+  const want = list.fields.map(fieldText).join(", ");
+  const listName = list.name.replaceAll("_", " ");
+  // The same choice asked a second way: each group on its own, as a yes/no
+  // question the model answers in isolation from the multiple choice.
+  const first = await ask(
+    config,
+    { task: instruction },
+    {
+      group: {
+        type: "choice",
+        instructions: `Task: ${instruction}\nWhich group of repeated page items is the "${listName}" list? Each item must provide: ${want}.`,
+        criteria: {
+          ...Object.fromEntries(groups.map((group) => [group.id, describeGroup(view, group)])),
+          [NONE]: "None of these groups",
+        },
+      },
+      ...Object.fromEntries(
+        groups.map((group) => [
+          `is_${group.id}`,
+          {
+            type: "noul",
+            instructions: `Task: ${instruction}\nAre these repeated page items the "${listName}" list (each item provides: ${want})? ${describeGroup(view, group)}`,
+          } satisfies DecisionQuestion,
+        ]),
+      ),
+    },
+  );
+  trace.push({
+    step: `${list.name}:group-ms`,
+    choice: "group",
+    confidence: Math.round(performance.now() - groupStarted),
+    options: 0,
+  });
+  const picked = choiceOf(first.answers, "group", trace, `${list.name}:group`, groups.length + 1);
+  const group = groups.find((candidate) => candidate.id === picked.choice);
+  const pointwise = groups.map((candidate) => ({
+    id: candidate.id,
+    yes: noulOf(first.answers, `is_${candidate.id}`),
+  }));
+  const best = pointwise.toSorted((a, b) => b.yes - a.yes)[0];
+  trace.push({
+    step: `${list.name}:group-pointwise`,
+    choice: best?.id ?? NONE,
+    confidence: best?.yes ?? 0,
+    options: groups.length,
+  });
+  if (group && best && (best.id !== group.id || best.yes < 0.5))
+    problem(trace, `group-disagree:${list.name}`);
+  if (!group) return undefined;
+  trace.push({
+    step: `${list.name}:page-items`,
+    choice: String(group.records.length),
+    confidence: 0,
+    options: 0,
+  });
+
+  const mappingStarted = performance.now();
+  const reused = speculative && group === candidate ? speculative : undefined;
+  const mappingRequest = reused?.mapping ?? buildListMapping(view, list, instruction, group);
+  const { slotOptions, counts, sections, bySection } = mappingRequest;
+  const { answers } = await (reused?.response ??
+    ask(config, { task: instruction, items: mappingRequest.preview }, mappingRequest.questions));
+  trace.push({
+    step: `${list.name}:mapping-ms`,
+    choice: reused ? "speculative" : "sequential",
+    confidence: Math.round(performance.now() - mappingStarted),
+    options: 0,
+  });
 
   const mapping = new Map<string, Slot | undefined>();
   const namesWithoutPrefix = new Set<string>();
   for (const field of list.fields) {
     const slots = slotOptions.get(field.name)!;
     const { choice } = choiceOf(
-      second.answers,
+      answers,
       `f_${field.name}`,
       trace,
       `${list.name}.${field.name}`,
@@ -533,18 +568,18 @@ async function readList(
 
   let records = group.records.map((record, index) => ({ record, index }));
   const countChoice = counts.length
-    ? choiceOf(second.answers, "count", trace, `${list.name}:count`, counts.length + 1).choice
+    ? choiceOf(answers, "count", trace, `${list.name}:count`, counts.length + 1).choice
     : "all";
   const count = countChoice.startsWith("c") ? Number(countChoice.slice(1)) : undefined;
-  const subset = count === undefined && noulOf(second.answers, "subset") > 0.5;
+  const subset = count === undefined && noulOf(answers, "subset") > 0.5;
   trace.push({
     step: `${list.name}:subset`,
     choice: String(subset),
-    confidence: noulOf(second.answers, "subset"),
+    confidence: noulOf(answers, "subset"),
     options: 2,
   });
   if (bySection) {
-    const votes = sections.map((_, i) => noulOf(second.answers, `sec${i}`));
+    const votes = sections.map((_, i) => noulOf(answers, `sec${i}`));
     trace.push({
       step: `${list.name}:section-votes`,
       choice: sections
@@ -558,14 +593,14 @@ async function readList(
       const keep = new Set(sections.filter((_, i) => votes[i]! >= 0.5));
       if (sections.length >= 3) {
         const firstEnd = choiceOf(
-          second.answers,
+          answers,
           "range_first",
           trace,
           `${list.name}:range_first`,
           sections.length + 1,
         ).choice;
         const lastEnd = choiceOf(
-          second.answers,
+          answers,
           "range_last",
           trace,
           `${list.name}:range_last`,
@@ -627,7 +662,7 @@ async function readList(
     trace.push({
       step: `${list.name}:filter`,
       choice: "subset",
-      confidence: noulOf(second.answers, "subset"),
+      confidence: noulOf(answers, "subset"),
       options: records.length,
     });
     records = records.filter(({ index }) => noulOf(third.answers, `r${index}`) >= 0.5);
@@ -1201,6 +1236,7 @@ export async function mapCopyExtract(
     readerChecks = false,
     verify = false,
     askVerifier = verify,
+    speculateListMapping = false,
   }: {
     instruction: string;
     schema: JsonSchema;
@@ -1212,6 +1248,7 @@ export async function mapCopyExtract(
     readerChecks?: boolean;
     verify?: boolean;
     askVerifier?: boolean;
+    speculateListMapping?: boolean;
   },
 ): Promise<{ data: Record<string, unknown>; trace: TraceEntry[]; verdict?: Verdict }> {
   const { lists, scalars } = plan(schema);
@@ -1220,7 +1257,9 @@ export async function mapCopyExtract(
     scalars.length
       ? readScalars(config, view, scalars, instruction, trace, reader, readerChecks)
       : Promise.resolve({}),
-    Promise.all(lists.map((list) => readList(config, view, list, instruction, trace))),
+    Promise.all(
+      lists.map((list) => readList(config, view, list, instruction, trace, speculateListMapping)),
+    ),
   ]);
   const data: Record<string, unknown> = { ...scalarData };
   lists.forEach((list, index) => {
