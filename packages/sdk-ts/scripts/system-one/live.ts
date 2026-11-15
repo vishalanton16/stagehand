@@ -79,8 +79,20 @@ const cases = [
   },
 ];
 
-const realTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
+const codeCellControls = [
+  {
+    name: "code-cell-spaces",
+    html: "<h1>Commands</h1><table><tr><th>Command</th></tr><tr><td><code>git <em>status</em></code></td></tr><tr><td><code>npm <em>run</em> lint</code></td></tr><tr><td><code>tools/<em>lint</em></code></td></tr></table>",
+    instruction: "List all commands in page order. Copy each command verbatim.",
+    schema: z.object({ commands: z.array(z.string()) }),
+    expected: { commands: ["git status", "npm run lint", "tools/lint"] },
+  },
+];
+
+const selectedTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
   const task = [
+    ...cases,
+    ...codeCellControls,
     ...heldout5Tasks,
     ...heldout6Tasks,
     ...heldout7Tasks,
@@ -92,7 +104,9 @@ const realTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
 });
 
 const server = createServer((request, response) => {
-  const task = cases.find((candidate) => request.url === "/" + candidate.name);
+  const task = [...cases, ...codeCellControls].find(
+    (candidate) => request.url === "/" + candidate.name,
+  );
   if (!task) return void response.writeHead(404).end();
   response
     .writeHead(200, { "Content-Type": "text/html" })
@@ -152,7 +166,7 @@ try {
       });
       try {
         const page = await browser.context.newPage();
-        for (const task of realTasks ?? cases) {
+        for (const task of selectedTasks ?? cases) {
           const url = "url" in task ? task.url : `http://127.0.0.1:${address.port}/${task.name}`;
           logs.length = 0;
           llmUsage.length = 0;

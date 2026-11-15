@@ -1,4 +1,5 @@
 import { mapCopyExtract } from "./decisions/mapCopy.js";
+import { readDomCodeText } from "./decisions/domCodeText.js";
 import { scalarReader } from "./decisions/scalarReader.js";
 import { extractWithClairic } from "./decisions/clairic.js";
 import { extractWithDecider } from "./decisions/decider.js";
@@ -19,6 +20,7 @@ import * as inference from "../inference.js";
 import type { ClientLlmRequest } from "../llm/clientLlmClient.js";
 import type { GatewayContext } from "../llm/gatewayClient.js";
 import type { StagehandLogger } from "../logger.js";
+import type { UnderstudyRuntimePage } from "../runtime.js";
 import { bytesToBase64 } from "../understudy/fileUploadUtils.js";
 import type { Page } from "../understudy/page.js";
 import { type Progress, runWithProgress } from "../understudy/progress.js";
@@ -49,7 +51,8 @@ type ExtractionResponse<Schema extends z.ZodObject> = ExtractionResponseBase & z
 
 type ExtractServiceOptions = {
   params: StagehandExtractParams;
-  page: Pick<Page, "captureSnapshot" | "screenshot">;
+  page: Pick<Page, "captureSnapshot" | "screenshot"> &
+    Partial<Pick<UnderstudyRuntimePage, "evaluate">>;
   model: ModelConfig | ClientModelReference | undefined;
   clientLLMGenerate: ClientLlmRequest;
   logger: StagehandLogger;
@@ -61,6 +64,8 @@ type ExtractServiceOptions = {
   speculateListMapping?: boolean;
   /** Internal replay control. SDK calls use the default group selection. */
   groupExperiment?: Parameters<typeof mapCopyExtract>[1]["groupExperiment"];
+  /** Internal live benchmark control for rendered code-cell evidence. */
+  domCodeTextExperiment?: boolean;
 };
 
 export async function extract(options: ExtractServiceOptions): Promise<ExtractResult> {
@@ -83,6 +88,7 @@ async function extractWithProgress(
     decisions,
     speculateListMapping,
     groupExperiment,
+    domCodeTextExperiment,
   }: ExtractServiceOptions,
   progress: Progress,
 ): Promise<ExtractResult> {
@@ -192,8 +198,33 @@ async function extractWithProgress(
     );
 
     const schema = z.fromJSONSchema(params.schema as Parameters<typeof z.fromJSONSchema>[0]);
+    let extractionTree = combinedTree;
 
     if (decisions?.extract === "map" && instruction && !screenshot) {
+      const evaluate = page.evaluate?.bind(page);
+      if (
+        domCodeTextExperiment &&
+        evaluate &&
+        !options?.locator &&
+        !options?.ignoreLocators?.length
+      ) {
+        const started = performance.now();
+        try {
+          const evidence = await progress.run("reading rendered code cells", () =>
+            readDomCodeText({ evaluate }, combinedTree, snapshot.combinedXpathMap),
+          );
+          extractionTree = evidence.tree;
+          logger.debug("Rendered code-cell evidence", {
+            category: "decisions",
+            inspected: evidence.inspected,
+            corrected: evidence.corrected,
+            durationMs: Math.round(performance.now() - started),
+          });
+        } catch {
+          progress.throwIfStopped();
+          logger.debug("Rendered code-cell evidence unavailable", { category: "decisions" });
+        }
+      }
       const started = performance.now();
       let decisionRequests = 0;
       const trace: Parameters<typeof mapCopyExtract>[1]["trace"] = [];
@@ -212,7 +243,7 @@ async function extractWithProgress(
           mapCopyExtract(config, {
             instruction,
             schema: params.schema as Parameters<typeof mapCopyExtract>[1]["schema"],
-            tree: combinedTree,
+            tree: extractionTree,
             urlMap: (combinedUrlMap ?? {}) as Record<string, string>,
             reader: scalarReader(config, progress),
             readerChecks: true,
@@ -321,7 +352,7 @@ async function extractWithProgress(
     const extractionResponse: ExtractionResponse<z.ZodObject> =
       await inference.extract<z.ZodObject>({
         instruction,
-        domElements: combinedTree,
+        domElements: extractionTree,
         schema: transformedSchema as z.ZodObject,
         generate: (input) =>
           progress.run("waiting for extract inference", () =>

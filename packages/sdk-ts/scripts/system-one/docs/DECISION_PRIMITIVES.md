@@ -209,3 +209,36 @@ Both Decision arms selected the correct SQLite group and returned all seven func
 Keep current Decider with Luna fallback as the SDK pattern and keep the verified heading fix. Leave retry and source coverage in the benchmark. Prioritize exact extraction of grounded text spans and rejection of malformed direct results. Avoid another broad retry run until the task design can distinguish an explicit abstention from a group disagreement. [SQLite function list](https://www.sqlite.org/lang_datefunc.html) · [Neon plan names](https://neon.com/pricing)
 
 The archive includes all 45 outputs, frozen task definitions, build hashes, and the candidate wiring patch at `runs/plan-validation/live-retry-promotion-20261115T050704Z/`.
+
+## Exact copying
+
+SQLite's overview list exposes the function name and its opening parenthesis in one accessibility text node. The mapper previously copied that node verbatim when the task requested bare names. The list mapper now offers the identifier before the opening parenthesis when the slot's samples have that structure. It still offers the full text for tasks seeking the signature or punctuation. Code copies the selected span from each source row. This adds no model request.
+
+| Check                                      | Result                                            |
+| ------------------------------------------ | ------------------------------------------------- |
+| SQLite names, previous live run            | 0/3, all names had a trailing opening parenthesis |
+| SQLite names, after span choice            | 2/2 frozen replay and 2/2 live, all direct        |
+| MDN Promise methods, parentheses requested | 2/2 frozen replay and 2/2 live, all direct        |
+| Known list regression                      | 42/42, zero wrong direct answers, eight fallbacks |
+
+GitHub exposed a separate problem. Stagehand's accessibility outline contained `repo:USERNAME/ REPOSITORY`. The XPath for that cell resolved to `repo:USERNAME/REPOSITORY` from both rendered `innerText` and DOM `textContent`. The same XPath and accessibility cell text appeared in the original and recaptured snapshots. The replay overlay substituted the observed rendered string for that one cell, preserving the rest of the outline. With the original outline, the Decider cascade and Luna each scored 0/2. With the overlay, both scored 2/2. The cascade still fell back on group disagreement. This was a one-cell evidence experiment. A general DOM reader should use the matched source element and preserve meaningful spaces.
+
+The exact-copy live results, replay overlay, DOM observations, and probe scripts are under `runs/plan-validation/exact-copy-20261115T051339Z/`. Replay archives: targeted `165993a3-ac57-4b7b-b3aa-c1180a920a94`, list regression `e8ff8873-8a44-44ac-9532-f48f25d5bf66`.
+
+### Bounded DOM reader
+
+The opt-in experiment reads at most 32 main-frame table cells in one browser batch. Each cell must match a snapshot XPath and contain a single visible code element whose rendered text matches the entire cell. It substitutes the rendered string only when both strings match after ignoring ordinary spaces. Scoped, ignored-locator, and screenshot extraction do not use this reader. Both Decider mapping and its Luna fallback see the resulting outline.
+
+| Live SDK case                 | Current cascade | With DOM reader | With DOM reader path |
+| ----------------------------- | --------------- | --------------- | -------------------- |
+| GitHub repository qualifiers  | 0/3             | 3/3             | Luna fallback        |
+| Intentional spaces in commands | 3/3             | 3/3             | Decider direct       |
+| SQLite function names         | 3/3             | 3/3             | Decider direct       |
+| Separate tables               | 3/3             | 3/3             | Luna fallback        |
+| Total                         | 9/12            | 12/12           | 6 direct, 6 fallback |
+
+The GitHub reader inspected 24 cells and corrected two in 3–5 ms per run on the final build. Decider still disagreed on the group all three times. Both arms used six Luna fallbacks and 16,212 input / 81 output Decider tokens. Luna used 79,309 input / 2,718 output tokens on baseline and 79,357 / 1,853 with the final reader. This run measures exactness on known cases and controls. Sample size and Luna output variance limit latency and cost comparisons.
+
+A Chromium probe retained a real space in `npm run lint` while correcting one surplus space. It also rejected a mismatched snapshot value, a code cell with extra prose, hidden code, and a cell with multiple code elements. Keep the reader behind the internal benchmark switch. If fresh pages justify broader use, test a shared snapshot fix so normal extraction can benefit too.
+
+The benchmark archive is `runs/plan-validation/dom-code-20261115T053007Z/`. It contains the alternating baseline and initial treatment runs, three confirmation rounds with the final treatment, the Chromium probe, and the build wiring. To reproduce, set `domCodeTextExperiment: true` in the controller's extraction service call for the treatment build. Use `LIVE_TASKS=hold7_github_repo_qualifiers,code-cell-spaces,promotion_sqlite_date_functions,separate-tables LIVE_ARMS=decider LIVE_ROUNDS=3` with `live.ts`.

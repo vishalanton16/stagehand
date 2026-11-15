@@ -168,3 +168,9 @@ The data view now keeps a list under its own heading when a preceding sibling ha
 ### SDK pattern decision
 
 Keep the current Decider and Luna fallback pattern with the nested-heading fix. In the [five-page fresh promotion check](./DECISION_PRIMITIVES.md#fresh-retry-promotion-check), each Decision arm scored 9/15 with the same nine fallbacks. The candidate never retried or rejected a competing source. The next experiment is exact span copying, led by SQLite function names and the GitHub qualifier regression.
+
+### Exact copying
+
+The [identifier-span option](./DECISION_PRIMITIVES.md#exact-copying) fixed the SQLite names on frozen replay and live pages. The MDN control still returned parentheses. For GitHub, a one-cell replay overlay using rendered DOM text moved both arms from 0/2 to 2/2. The Decider cascade still fell back on group disagreement. General DOM text retrieval remains an experiment.
+
+The [bounded DOM reader](./DECISION_PRIMITIVES.md#bounded-dom-reader) recovered the GitHub qualifier through Luna in all three live runs, up from 0/3. The other three cases passed all rounds in both arms. The reader stays benchmark-only. Next is a live comparison of scalar copy, Locate, and Clairic on the same bounded evidence.

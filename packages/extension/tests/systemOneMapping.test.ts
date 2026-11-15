@@ -53,6 +53,51 @@ describe("System One missing values", () => {
 });
 
 describe("System One composite labels", () => {
+  it.each([true, false])(
+    "offers the identifier as a span alongside the whole value (%s)",
+    async (copyName) => {
+      vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => ({
+        model: "test",
+        answers: Object.fromEntries(
+          Object.entries(questions).map(([key, question]) => {
+            if (question.type === "noul")
+              return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
+            const choices = Object.entries(question.criteria);
+            const span = choices.find(
+              ([, label]) =>
+                typeof label === "string" &&
+                label.startsWith("Identifier before the opening parenthesis"),
+            );
+            if (key === "f_items") expect(span?.[1]).toContain('"publish"');
+            const choice = (copyName ? span?.[0] : undefined) ?? choices[0]![0];
+            return [
+              key,
+              { type: "choice" as const, choice, probabilities: { [choice]: 1 }, confidence: 1 },
+            ];
+          }),
+        ),
+        usage: { inputTokens: 1, outputTokens: 1 },
+        durationMs: 1,
+      }));
+      const result = await mapCopyExtract(
+        { apiKey: "test" },
+        {
+          instruction: copyName ? "Copy the function names." : "Copy the signatures.",
+          schema: {
+            type: "object",
+            required: ["items"],
+            properties: { items: { type: "array", items: { type: "string" } } },
+          },
+          tree: "[1] list\n  [2] listitem: publish(message)\n  [3] listitem: read()\n  [4] listitem: close()",
+          urlMap: {},
+        },
+      );
+      expect(result.data).toEqual({
+        items: copyName ? ["publish", "read", "close"] : ["publish(message)", "read()", "close()"],
+      });
+    },
+  );
+
   it("keeps an unspaced colon in a copied list value", async () => {
     vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => ({
       model: "test",

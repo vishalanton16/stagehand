@@ -492,29 +492,33 @@ function buildListMapping(view: DataView, list: ListPlan, instruction: string, g
   const hasNumericField = list.fields.some(
     (field) => field.type === "number" || field.type === "integer",
   );
+  const textSpans = [
+    {
+      read: (text: string) => textAfterNumericPrefix(text, hasNumericField),
+      label: "Text after the leading numeric identifier in the same label",
+    },
+    { read: callableIdentifier, label: "Identifier before the opening parenthesis" },
+  ];
   const slotOptions = new Map(
     list.fields.map((field) => [
       field.name,
       rankSlots(group.slots, field).flatMap((slot) => {
-        const whole = { slot, withoutPrefix: false, description: describeSlot(slot, field) };
-        if (
-          field.type !== "string" ||
-          slot.samples.length < 2 ||
-          !slot.samples.every(
-            (sample) => textAfterNumericPrefix(sample, hasNumericField) !== undefined,
-          )
-        )
-          return [whole];
-        const samples = slot.samples.map((sample) =>
-          textAfterNumericPrefix(sample, hasNumericField)!,
-        );
+        const whole = { slot, readText: undefined, description: describeSlot(slot, field) };
+        if (field.type !== "string" || slot.samples.length < 2) return [whole];
         return [
           whole,
-          {
-            slot,
-            withoutPrefix: true,
-            description: `Text after the leading numeric identifier in the same label, ${describeSlot({ ...slot, samples }, field)}`,
-          },
+          ...textSpans.flatMap(({ read, label }) => {
+            const samples = slot.samples.map(read);
+            return samples.every((sample) => sample !== undefined)
+              ? [
+                  {
+                    slot,
+                    readText: read,
+                    description: `${label}, ${describeSlot({ ...slot, samples }, field)}`,
+                  },
+                ]
+              : [];
+          }),
         ];
       }),
     ]),
@@ -571,7 +575,7 @@ function buildListMapping(view: DataView, list: ListPlan, instruction: string, g
     }
   }
   const preview = group.records.slice(0, 3).map((record) => recordText(view, record, 300));
-  return { slotOptions, counts, sections, bySection, preview, questions, hasNumericField };
+  return { slotOptions, counts, sections, bySection, preview, questions };
 }
 
 async function chooseListGroup(
@@ -801,7 +805,7 @@ async function readList(
   const mappingStarted = performance.now();
   const reused = speculative && group === candidate ? speculative : undefined;
   const mappingRequest = reused?.mapping ?? buildListMapping(view, list, instruction, group);
-  const { slotOptions, counts, sections, bySection, hasNumericField } = mappingRequest;
+  const { slotOptions, counts, sections, bySection } = mappingRequest;
   const { answers } = await (reused?.response ??
     ask(config, { task: instruction, items: mappingRequest.preview }, mappingRequest.questions));
   trace.push({
@@ -812,7 +816,7 @@ async function readList(
   });
 
   const mapping = new Map<string, Slot | undefined>();
-  const namesWithoutPrefix = new Set<string>();
+  const textReaders = new Map<string, (text: string) => string | undefined>();
   for (const field of list.fields) {
     const slots = slotOptions.get(field.name)!;
     const { choice } = choiceOf(
@@ -827,7 +831,7 @@ async function readList(
     const slot =
       option?.slot ?? (field.type === "url" && linked.length === 1 ? linked[0]?.slot : undefined);
     mapping.set(field.name, slot);
-    if (option?.withoutPrefix) namesWithoutPrefix.add(field.name);
+    if (option?.readText) textReaders.set(field.name, option.readText);
   }
   if (list.fields.every((field) => !mapping.get(field.name))) return undefined;
 
@@ -988,9 +992,10 @@ async function readList(
               (slot.key === "." || other.key.startsWith(`${slot.key}/`)),
           )
         : [];
+      const readText = textReaders.get(field.name);
       let value =
-        slot && namesWithoutPrefix.has(field.name)
-          ? textAfterNumericPrefix(readSlot(view, record, slot.key)?.name ?? "", hasNumericField)
+        slot && readText
+          ? readText(readSlot(view, record, slot.key)?.name ?? "")
           : slot && inner.length && field.type === "string"
             ? residual(
                 view,
@@ -1044,6 +1049,10 @@ function textAfterNumericPrefix(label: string, allowBareInteger: boolean): strin
   const section = /^\d+(?:\.\d+)*\.\s+(\p{L}.*)$/u.exec(text);
   if (section || !allowBareInteger) return section?.[1];
   return /^\d+\s+(\p{L}.*)$/u.exec(text)?.[1];
+}
+
+function callableIdentifier(text: string): string | undefined {
+  return /^\s*([\p{L}_$][\p{L}\p{N}_$]*(?:\.[\p{L}_$][\p{L}\p{N}_$]*)*)\s*\(/u.exec(text)?.[1];
 }
 
 /**
