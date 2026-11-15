@@ -4,4 +4,4 @@
 "@browserbasehq/stagehand-python": patch
 ---
 
-Two more opt-ins under the experimental `experimentalDecisions` init param, both off by default: `observe: true` resolves `observe()` through TypeSafe Jev before the LLM, and `cacheCheck: true` verifies each cached action still points at a matching element before replaying it (stale entries are re-inferred instead of clicked).
+Replace the prototype decision observer with bounded single-target and complete-set selection, deterministic discovery, and fresh candidate evidence checks before returning. Preserve ordinary LLM fallback, cache behavior, scope, variables and cancellation. Remove the old model-based cache checker.

@@ -1,6 +1,3 @@
-import { TimeoutError } from "../errors.js";
-import { runDecisionsObserve } from "./decisions/observe.js";
-import type { DecisionsConfig } from "./decisions/pipeline.js";
 import type {
   Action,
   ClientModelReference,
@@ -20,21 +17,23 @@ import { trimTrailingTextNode } from "../utils.js";
 import * as cacheService from "./cacheService.js";
 import * as llmService from "./llmService.js";
 import { disabledCacheMetadata, zeroStagehandResultUsage } from "./resultUsage.js";
+import { runDecisionsObserve } from "./decisions/observe.js";
+import type { DecisionsConfig } from "./decisions/config.js";
 
 const DEFAULT_OBSERVE_INSTRUCTION =
   "Find elements that can be used for any future actions in the page. These may be navigation links, related pages, section/subsection links, buttons, or other interactive elements. Be comprehensive: if there are multiple elements that may be relevant for future actions, return all of them.";
 
 type ObserveServiceOptions = {
   params: StagehandObserveParams;
-  page: Pick<Page, "captureSnapshot">;
+  page: Pick<Page, "captureSnapshot"> & Partial<Pick<Page, "evaluate" | "url">>;
   model: ModelConfig | ClientModelReference | undefined;
   clientLLMGenerate: ClientLlmRequest;
   logger: StagehandLogger;
   systemPrompt?: string;
   cache?: cacheService.CacheContext;
   gateway?: GatewayContext;
-  decisions?: DecisionsConfig & { observe?: boolean };
   progress?: Progress;
+  decisions?: DecisionsConfig;
 };
 
 export async function observe(options: ObserveServiceOptions): Promise<ObserveResult> {
@@ -59,18 +58,21 @@ async function observeWithProgress(
   progress: Progress,
 ): Promise<ObserveResult> {
   const { instruction, options } = params;
+  const effectiveInstruction = instruction ?? DEFAULT_OBSERVE_INSTRUCTION;
+  const decisionUsage = zeroStagehandResultUsage();
   if (decisions) {
+    const record = decisions.recordDecisionUsage;
     decisions = {
       ...decisions,
       signal: progress.signal,
-      recordDecisionUsage: (usage) =>
-        logger.info("Decision model usage", {
-          category: "decisions-usage",
-          ...usage,
-        }),
+      recordDecisionUsage: (usage) => {
+        decisionUsage.inputTokens += usage.inputTokens;
+        decisionUsage.outputTokens += usage.outputTokens;
+        record?.(usage);
+        logger.info("Decision model usage", { category: "decisions-usage", ...usage });
+      },
     };
   }
-  const effectiveInstruction = instruction ?? DEFAULT_OBSERVE_INSTRUCTION;
   logger.info("Starting observation", {
     category: "observation",
     instruction: effectiveInstruction,
@@ -99,44 +101,34 @@ async function observeWithProgress(
   });
 
   async function runObservation(): Promise<cacheService.CacheExecuteOutcome<ObserveResult>> {
-    // `enabled: false` is the shared kill switch for every decision-model feature.
-    if (decisions?.observe && decisions.enabled !== false) {
+    if (decisions && page.evaluate && page.url) {
       const outcome = await runDecisionsObserve(decisions, {
-        page,
+        page: page as Pick<Page, "captureSnapshot" | "evaluate" | "url">,
         logger,
         instruction,
         variables: options?.variables,
+        systemPrompt,
         snapshotOptions: {
           focusLocator: options?.locator,
           ignoreLocators: options?.ignoreLocators,
         },
-        ensureTimeRemaining: () => progress.throwIfStopped(),
-      }).catch((error: unknown) => {
-        if (error instanceof TimeoutError) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        return { kind: "fallback" as const, reason: `decision_error:${message}` };
+        progress,
       });
-      if (outcome.kind === "done") {
+      decisionUsage.inferenceTimeMs += outcome.inferenceTimeMs;
+      if (outcome.kind === "done")
         return {
           result: {
             data: outcome.actions,
-            metadata: { usage: zeroStagehandResultUsage(), cache: disabledCacheMetadata() },
+            metadata: { usage: decisionUsage, cache: disabledCacheMetadata() },
           },
-          cacheValue: outcome.actions.length > 0 ? outcome.actions : undefined,
+          cacheValue: outcome.actions.length ? outcome.actions : undefined,
           llmUsage: { inputTokens: 0, outputTokens: 0, llmDurationMs: 0 },
         };
-      }
       logger.info("Decisions observe fell back to the LLM", {
         category: "decisions",
         reason: outcome.reason,
       });
-      if (decisions.llmFallback === false) {
-        // Like act(): an abstention with the fallback off is a failure the
-        // caller can see, not an empty "nothing on the page" success.
-        throw new Error(`Decisions observe abstained (${outcome.reason.slice(0, 160)})`);
-      }
     }
-
     progress.throwIfStopped();
     const { combinedTree, combinedXpathMap } = await page.captureSnapshot(
       {
@@ -225,11 +217,11 @@ async function observeWithProgress(
         data: actions,
         metadata: {
           usage: {
-            inputTokens: observation.prompt_tokens,
-            outputTokens: observation.completion_tokens,
+            inputTokens: observation.prompt_tokens + decisionUsage.inputTokens,
+            outputTokens: observation.completion_tokens + decisionUsage.outputTokens,
             reasoningTokens: observation.reasoning_tokens,
             cachedInputTokens: observation.cached_input_tokens,
-            inferenceTimeMs: observation.inference_time_ms,
+            inferenceTimeMs: observation.inference_time_ms + decisionUsage.inferenceTimeMs,
           },
           cache: disabledCacheMetadata(),
         },

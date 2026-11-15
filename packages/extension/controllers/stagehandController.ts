@@ -64,10 +64,7 @@ export function createStagehandController(
 
   type Via = "llm" | "decisions";
 
-  function decisionsFor(
-    via: Via,
-    operation: string,
-  ): (DecisionsConfig & { observe?: boolean }) | undefined {
+  function decisionsFor(via: Via, operation: string): DecisionsConfig | undefined {
     const state = runtime.state.getState();
     const configured =
       state.status === "initialized" ? state.initParams.experimentalDecisions : undefined;
@@ -77,7 +74,7 @@ export function createStagehandController(
         `stagehand.experimentalDecisions.${operation}() needs experimentalDecisions to be configured when Stagehand is created`,
       );
     }
-    return operation === "observe" ? { ...configured, observe: true } : configured;
+    return configured;
   }
 
   async function act(params: StagehandActParams, context: HandlerContext, via: Via = "llm") {
@@ -139,13 +136,14 @@ export function createStagehandController(
         state.initParams,
         runtime.adapters.clientBrowserbaseRequest,
       );
-      if (!model && !gateway) {
+      if (!model && !gateway && via === "llm") {
         throw new Error("An LLM was not configured during Stagehand initialization");
       }
 
       const result = await observeService.observe({
+        decisions: decisionsFor(via, "observe"),
         params,
-        page: runtime.resolvePage(params.pageId),
+        page: runtime.resolveUnderstudyPage(params.pageId),
         model,
         clientLLMGenerate: runtime.adapters.clientLLMGenerate,
         logger,
@@ -155,7 +153,6 @@ export function createStagehandController(
           runtime.adapters.clientBrowserbaseRequest,
         ),
         gateway,
-        decisions: via === "decisions" ? decisionsFor(via, "observe") : undefined,
       });
       runtime.metrics.record("observe", result.metadata.usage);
       return result;

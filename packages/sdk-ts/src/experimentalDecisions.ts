@@ -28,10 +28,9 @@ export type ExperimentalDecisionsHost = {
 };
 
 /**
- * `stagehand.experimentalDecisions`: act, observe and extract resolved by a
- * decision model (typed questions answered with probabilities, a few hundred
- * milliseconds each) instead of an LLM call, falling back to the LLM when the
- * model is not confident. Same arguments and results as the methods on
+ * `stagehand.experimentalDecisions`: bounded action, observation and extraction
+ * decisions with automatic LLM fallback.
+ * Same arguments and results as the methods on
  * `Stagehand`; requires `experimentalDecisions` in `Stagehand.create()`.
  *
  * Experimental: the surface and its behaviour may change between releases.

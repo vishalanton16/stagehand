@@ -34,7 +34,7 @@ describe("stagehand.experimentalDecisions routing", () => {
 
     const asked = { apiKey: "decision-key" };
     expect(services.act.mock.calls[0][0].decisions).toStrictEqual(asked);
-    expect(services.observe.mock.calls[0][0].decisions).toStrictEqual({ ...asked, observe: true });
+    expect(services.observe.mock.calls[0][0].decisions).toStrictEqual(asked);
     expect(services.extract.mock.calls[0][0].decisions).toStrictEqual(asked);
     await close();
   });
@@ -76,7 +76,7 @@ describe("stagehand.experimentalDecisions routing", () => {
     await close();
   });
 
-  it("allows decision-only act and extract while observation still requires an LLM", async () => {
+  it("allows decision-only calls and keeps plain methods dependent on an LLM", async () => {
     const { router, services, close } = await setup({ apiKey: "decision-key" }, false);
     try {
       await router.handle(call("stagehand.experimental_decisions_act", { instruction: "click" }));
@@ -85,9 +85,10 @@ describe("stagehand.experimentalDecisions routing", () => {
       );
       expect(services.act.mock.calls[0][0].model).toBeUndefined();
       expect(services.extract.mock.calls[0][0].model).toBeUndefined();
-      await expect(
-        router.handle(call("stagehand.experimental_decisions_observe", { instruction: "find" })),
-      ).rejects.toThrow("LLM was not configured");
+      await router.handle(
+        call("stagehand.experimental_decisions_observe", { instruction: "find" }),
+      );
+      expect(services.observe.mock.calls[0][0].model).toBeUndefined();
       await expect(router.handle(call("stagehand.act", { instruction: "click" }))).rejects.toThrow(
         "LLM was not configured",
       );

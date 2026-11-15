@@ -1,34 +1,9 @@
+import { type OutlineNode } from "./outline.js";
+export { parseOutline, markEditable, type OutlineNode } from "./outline.js";
 import type { JsonValue } from "./client.js";
 
-/**
- * Parses the hybrid snapshot outline back into nodes so the Decisions act pipeline
- * can build role-filtered candidate views. Lines follow `formatTreeLine`:
- * `[frame-node] role: name [selected] [checked]`, two spaces per depth.
- */
-export type OutlineNode = {
-  id: string;
-  role: string;
-  name: string;
-  flags: string[];
-  depth: number;
-  parent?: number;
-  index: number;
-  /** Topmost node of an editable region per the browser (covers contenteditable). */
-  editable?: boolean;
-};
+export type ViewKind = "pointer" | "input";
 
-export type ViewKind =
-  | "pointer"
-  | "input"
-  | "select"
-  | "scroll"
-  | "option"
-  | "broad"
-  | "text"
-  | "link";
-
-const LINE = /^( *)\[([^\]]+)\] (.*)$/;
-const FLAGS = /((?: \[(?:selected|checked)\])+)$/;
 const ENCODED_ID = /^\d+-\d+$/;
 
 const POINTER_ROLES = new Set([
@@ -51,9 +26,9 @@ const POINTER_ROLES = new Set([
   "image",
   "disclosuretriangle",
 ]);
+
 const INPUT_ROLES = new Set(["textbox", "searchbox", "combobox", "spinbutton", "textarea"]);
-const SELECT_ROLES = new Set(["combobox", "listbox", "select"]);
-const OPTION_ROLES = new Set(["option", "menulistoption"]);
+
 const TEXT_ROLES = new Set([
   "statictext",
   "labeltext",
@@ -65,73 +40,12 @@ const TEXT_ROLES = new Set([
   "label",
   "menulistoption",
 ]);
-const SCROLL_ROLES = new Set(["rootwebarea", "webarea", "iframe", "html", "document"]);
 
-/**
- * Flags editable regions from the snapshot's side channel. A contenteditable
- * paragraph has role `paragraph`; without this it never reaches the fill view
- * and the nearest real textbox gets filled instead.
- */
-export function markEditable(
-  nodes: OutlineNode[],
-  editableIds: Iterable<string> | undefined,
-): void {
-  const editable = new Set(editableIds ?? []);
-  if (editable.size === 0) return;
-  for (const node of nodes) {
-    if (!editable.has(node.id)) continue;
-    const parent = node.parent === undefined ? undefined : nodes[node.parent];
-    if (!parent || !editable.has(parent.id)) node.editable = true;
-  }
-}
+const SCROLL_ROLES = new Set(["rootwebarea", "webarea", "iframe", "html", "document"]);
 
 /** True when the snapshot gave the node nothing to be recognised by. */
 export function isNameless(nodes: OutlineNode[], node: OutlineNode): boolean {
   return !node.name && !descendants(nodes, node, 6).some((child) => child.name);
-}
-
-export function parseOutline(tree: string): OutlineNode[] {
-  const nodes: OutlineNode[] = [];
-  const stack: number[] = [];
-
-  for (const line of tree.split("\n")) {
-    const match = LINE.exec(line);
-    if (!match) {
-      // Names are not newline-stripped by the producer; a line without an id
-      // is the continuation of the previous node's name.
-      const previous = nodes[nodes.length - 1];
-      if (previous && line.trim()) previous.name = `${previous.name} ${line.trim()}`.trim();
-      continue;
-    }
-    const [, indent = "", id = "", rest = ""] = match;
-    const depth = Math.floor(indent.length / 2);
-
-    let body = rest;
-    const flagMatch = FLAGS.exec(body);
-    const flags = flagMatch
-      ? [...flagMatch[1]!.matchAll(/\[(\w+)\]/g)].map((flag) => flag[1]!)
-      : [];
-    if (flagMatch) body = body.slice(0, -flagMatch[1]!.length);
-
-    const separator = body.indexOf(": ");
-    const role = (separator === -1 ? body : body.slice(0, separator)).trim();
-    const name = separator === -1 ? "" : body.slice(separator + 2).trim();
-
-    while (stack.length > 0 && nodes[stack[stack.length - 1]!]!.depth >= depth) stack.pop();
-    const node: OutlineNode = {
-      id,
-      role,
-      name,
-      flags,
-      depth,
-      parent: stack[stack.length - 1],
-      index: nodes.length,
-    };
-    nodes.push(node);
-    stack.push(node.index);
-  }
-
-  return nodes;
 }
 
 function roleTokens(node: OutlineNode): string[] {
@@ -149,107 +63,11 @@ function isAddressable(node: OutlineNode): boolean {
   return ENCODED_ID.test(node.id);
 }
 
-/** Candidate nodes for a family. `option` is the post-expand view for custom dropdowns. */
-export function buildView(nodes: OutlineNode[], kind: ViewKind): OutlineNode[] {
-  const matches = (node: OutlineNode): boolean => {
-    switch (kind) {
-      case "pointer":
-        return hasRole(node, POINTER_ROLES);
-      case "input":
-        return hasRole(node, INPUT_ROLES) || node.editable === true;
-      case "select":
-        return hasRole(node, SELECT_ROLES) || hasRole(node, POINTER_ROLES);
-      case "scroll":
-        return roleTokens(node).includes("scrollable");
-      case "link":
-        return roleTokens(node).includes("link");
-      case "text":
-        // Anything whose text could BE a value: named nodes, plus nameless
-        // blocks (a paragraph with inline links) whose pieces read as one value.
-        return (
-          (node.name.length > 0 &&
-            !hasRole(node, SCROLL_ROLES) &&
-            !repeatsParentName(nodes, node)) ||
-          isTextBlock(nodes, node)
-        );
-      case "broad":
-        return (
-          node.name.length > 0 && !hasRole(node, SCROLL_ROLES) && !repeatsParentName(nodes, node)
-        );
-      case "option":
-        return hasRole(node, POINTER_ROLES) || (hasRole(node, TEXT_ROLES) && node.name.length > 0);
-    }
-  };
-  // A native select's options are arguments, not targets: offered alongside
-  // the select they split the vote with it (and balloon the candidate count).
-  const view = nodes.filter(
-    (node) => isAddressable(node) && matches(node) && !insideNativeSelect(nodes, node),
-  );
-  // A document's RootWebArea and its `scrollable, html` are the same scroller;
-  // offering both splits the probability mass. Roots only stand in when the
-  // snapshot marked nothing scrollable.
-  if (kind === "scroll" && view.length === 0) {
-    return nodes.filter((node) => isAddressable(node) && hasRole(node, SCROLL_ROLES));
-  }
-  return view;
-}
-
 function insideNativeSelect(nodes: OutlineNode[], node: OutlineNode): boolean {
   for (let parent = node.parent; parent !== undefined; parent = nodes[parent]!.parent) {
     if (roleTokens(nodes[parent]!).includes("select")) return true;
   }
   return false;
-}
-
-/** True for a scroll candidate that is the top-level document rather than an iframe or container. */
-export function isMainDocumentScroller(nodes: OutlineNode[], node: OutlineNode): boolean {
-  return roleTokens(node).includes("html") && !insideIframe(nodes, node);
-}
-
-const TEXT_BLOCK_ROLES = new Set([
-  "paragraph",
-  "cell",
-  "gridcell",
-  "listitem",
-  "heading",
-  "labeltext",
-  "time",
-  "term",
-  "definition",
-  "descriptionlistdetail",
-  "descriptionlistterm",
-  "p",
-  "td",
-  "th",
-  "li",
-  "dd",
-  "dt",
-  "span",
-  "div",
-  "blockquote",
-  "caption",
-  "figcaption",
-]);
-const TEXT_BLOCK_MAX_CHARS = 400;
-
-function isTextBlock(nodes: OutlineNode[], node: OutlineNode): boolean {
-  if (node.name || !hasRole(node, TEXT_BLOCK_ROLES)) return false;
-  const pieces = descendants(nodes, node, 25);
-  if (pieces.length < 2 || pieces.length >= 25) return false;
-  // A block of blocks is a container, not a value.
-  if (
-    pieces.some(
-      (piece) =>
-        !piece.name &&
-        hasRole(piece, TEXT_BLOCK_ROLES) &&
-        piece.depth === node.depth + 1 &&
-        descendants(nodes, piece, 3).length > 1,
-    )
-  ) {
-    return false;
-  }
-  const text = textOf(nodes, node);
-  return text.length > 0 && text.length <= TEXT_BLOCK_MAX_CHARS;
 }
 
 /** The node's own name, or the text of its subtree read in order. */
@@ -270,33 +88,11 @@ function repeatsParentName(nodes: OutlineNode[], node: OutlineNode): boolean {
 }
 
 /**
- * Option labels of a native <select>, which the snapshot renames to role
- * `select` (`scrollable, select` for list boxes). ARIA listboxes/comboboxes
- * also have option children but `selectOption` silently no-ops on them, so
- * they must go through the click flow instead.
- */
-export function nativeSelectOptions(nodes: OutlineNode[], node: OutlineNode): string[] {
-  return nativeOptionNodes(nodes, node).map((child) => child.name);
-}
-
-export function selectedNativeOptions(nodes: OutlineNode[], node: OutlineNode): string[] {
-  return nativeOptionNodes(nodes, node)
-    .filter((child) => child.flags.includes("selected"))
-    .map((child) => child.name);
-}
-
-function nativeOptionNodes(nodes: OutlineNode[], node: OutlineNode): OutlineNode[] {
-  if (!roleTokens(node).includes("select")) return [];
-  return descendants(nodes, node, 5000).filter(
-    (child) => hasRole(child, OPTION_ROLES) && child.name.length > 0,
-  );
-}
-
-/**
  * Structured description for one candidate. Ancestor, heading, and nearby-label
  * context is what separates otherwise identical lines like two `button: Edit`.
  */
 const DESCRIPTIONS = new WeakMap<OutlineNode[], Map<string, Record<string, JsonValue>>>();
+
 const TWIN_INDEX = new WeakMap<OutlineNode[], Map<string, OutlineNode[]>>();
 
 /** Same role and name, from an index built once per snapshot (pages have thousands of nodes). */
@@ -435,6 +231,7 @@ const CELL_ROLES = new Set([
   "th",
   "layouttablecell",
 ]);
+
 const TABLE_ROLES = new Set(["table", "grid", "treegrid", "layouttable", "rowgroup"]);
 
 /** Row label (first cell of the row) and column header for a node inside a table cell. */
@@ -518,6 +315,7 @@ function followingSiblingText(nodes: OutlineNode[], node: OutlineNode): string |
 }
 
 const GROUP_MAX_NODES = 60;
+
 const GROUP_MAX_CONTROLS = 8;
 
 /**
@@ -653,89 +451,13 @@ export function scoreCandidates(
   return scores;
 }
 
-/** Other nodes the decision model cannot tell from this one: same description apart from the "n of m" ordinal. */
-export function indistinguishableTwins(nodes: OutlineNode[], node: OutlineNode): OutlineNode[] {
-  const key = (candidate: OutlineNode) => {
-    const { occurrence: _occurrence, ...rest } = describeCandidate(nodes, candidate);
-    return JSON.stringify(rest);
-  };
-  const wanted = key(node);
-  return sameNamed(nodes, node).filter((other) => key(other) === wanted);
-}
-
-/**
- * Same-named copies of a control inside the same item: a product card's hover
- * overlay repeats its "Add to cart", a row repeats its link for small screens.
- */
-export function nearbyTwins(nodes: OutlineNode[], node: OutlineNode): OutlineNode[] {
-  if (!node.name) return [node];
-  const group = contextGroup(nodes, node);
-  const scope = group?.parent !== undefined ? nodes[group.parent]! : group;
-  if (!scope) return [node];
-  const twins = [scope, ...descendants(nodes, scope, 200)].filter(
-    (other) => other.role === node.role && other.name === node.name,
+export function buildView(nodes: OutlineNode[], kind: ViewKind): OutlineNode[] {
+  return nodes.filter(
+    (node) =>
+      isAddressable(node) &&
+      !insideNativeSelect(nodes, node) &&
+      (kind === "pointer"
+        ? hasRole(node, POINTER_ROLES)
+        : hasRole(node, INPUT_ROLES) || node.editable === true),
   );
-  return twins.length >= 2 && twins.length <= 3 ? twins : [node];
-}
-
-/**
- * True for the text an editable control echoes back as its own child. Options
- * can legitimately live under a combobox (aria-owns), so only bare text counts.
- */
-export function insideEditable(nodes: OutlineNode[], node: OutlineNode): boolean {
-  if (node.parent === undefined || !roleTokens(node).includes("statictext")) return false;
-  return hasRole(nodes[node.parent]!, INPUT_ROLES);
-}
-
-/** Candidates whose accessible name equals the quoted target exactly (case-insensitive). */
-export function exactNameMatches(candidates: OutlineNode[], quoted: string): OutlineNode[] {
-  const wanted = quoted.trim().toLowerCase();
-  return candidates.filter((candidate) => candidate.name.trim().toLowerCase() === wanted);
-}
-
-/**
- * The outline reduced to the given nodes, their ancestors and their subtrees,
- * in the original line format. Handed to the LLM fallback in place of the
- * whole page when the decision model narrowed the choice but could not commit.
- */
-export function focusOutline(nodes: OutlineNode[], ids: Iterable<string>): string {
-  const wanted = new Set(ids);
-  const keep = new Set<number>();
-  for (const node of nodes) {
-    if (!wanted.has(node.id)) continue;
-    for (let at: number | undefined = node.index; at !== undefined; at = nodes[at]!.parent)
-      keep.add(at);
-    for (const child of descendants(nodes, node, 40)) keep.add(child.index);
-    // The card or row around it carries what tells it from its twins.
-    const group = contextGroup(nodes, node);
-    if (group)
-      for (const child of descendants(nodes, group, GROUP_MAX_NODES)) keep.add(child.index);
-  }
-  return nodes
-    .filter((node) => keep.has(node.index))
-    .map(
-      (node) =>
-        `${"  ".repeat(node.depth)}[${node.id}] ${node.role}${node.name ? `: ${node.name}` : ""}${node.flags
-          .map((flag) => ` [${flag}]`)
-          .join("")}`,
-    )
-    .join("\n");
-}
-
-/** A compact page digest for page-state questions: title plus the first visible headings and text. */
-export function pageDigest(nodes: OutlineNode[], limit = 40): Record<string, JsonValue> {
-  const root = nodes.find((node) => roleTokens(node).includes("rootwebarea"));
-  const lines: string[] = [];
-  for (const node of nodes) {
-    if (lines.length >= limit) break;
-    if (!node.name || roleTokens(node).includes("rootwebarea")) continue;
-    if (repeatsParentName(nodes, node)) continue;
-    lines.push(`${node.role}: ${truncate(node.name, 140)}`);
-  }
-  return {
-    title: root?.name ?? "",
-    element_count: nodes.length,
-    inputs: nodes.filter((node) => hasRole(node, INPUT_ROLES)).length,
-    first_content: lines,
-  };
 }

@@ -1,0 +1,732 @@
+{
+  "measured": "2026-11-15 to 2026-11-16 Asia/Kolkata",
+  "baseCommit": "7bd1902c28d952cda2bd07e83d3e3722127525d5",
+  "rawRoot": "vendor-repos/system-one-corpus/runs/observe",
+  "workingTreeUncommitted": true,
+  "runs": {
+    "dev-baselines-v2": {
+      "summary": [
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 22,
+          "wrongAccept": 6,
+          "direct": 20,
+          "fallback": 8,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1331.5587919999998,
+          "p95": 5689.833625000001,
+          "meanInputTokens": 8656.642857142857
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 2253.119125000001,
+          "p95": 19666.533083,
+          "meanInputTokens": 2616.4285714285716
+        }
+      ],
+      "manifestSha256": "e7b11503a05fa6c093d0ab1fbab115d0ff2f153517cc2e7e6b8bd7b6d88a908f",
+      "resultsSha256": "b217698216920734102b618b8666572d840054bd5cdeb82408b9f691217e00f3"
+    },
+    "dev-policy-v2": {
+      "summary": [
+        {
+          "arm": "single",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 24,
+          "fallback": 4,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 817.5659589999996,
+          "p95": 8406.161583000001,
+          "meanInputTokens": 19920.785714285714
+        },
+        {
+          "arm": "pointwise",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 24,
+          "fallback": 4,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 789.3028750000085,
+          "p95": 9056.560832999996,
+          "meanInputTokens": 19920.785714285714
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1858.4421250000014,
+          "p95": 18857.779291,
+          "meanInputTokens": 2616.4285714285716
+        }
+      ],
+      "manifestSha256": "93d99500b6489a1e409a75cede16adacb74e90333c55b31d9bd10bf3236fce5d",
+      "resultsSha256": "cbbf16e4267d4a419c7c14a5116c52e34074f13abb6a57b95346e76565b00161"
+    },
+    "dev-local-1": {
+      "summary": [
+        {
+          "arm": "local",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 26,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 840.2504170000029,
+          "p95": 6625.972667000001,
+          "meanInputTokens": 14913.857142857143
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1632.3912500000006,
+          "p95": 19660.192291,
+          "meanInputTokens": 2616.4285714285716
+        }
+      ],
+      "manifestSha256": "76f46fb598465a2984736b5ec3217aea8996b791ef288415a8aae8f7e34b793c",
+      "resultsSha256": "141465312ba3babc03b533556d8a0e91fd9e4fe191062f31943673a87bd80e51"
+    },
+    "dev-routed-1": {
+      "summary": [
+        {
+          "arm": "routed",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 26,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1183.266125000002,
+          "p95": 7169.949582999994,
+          "meanInputTokens": 8222.357142857143
+        },
+        {
+          "arm": "routed-rich",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 24,
+          "fallback": 4,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1126.658417000006,
+          "p95": 6948.178458999995,
+          "meanInputTokens": 9005.714285714286
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 27,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1617.8232500000013,
+          "p95": 19184.728917,
+          "meanInputTokens": 2616.4285714285716
+        }
+      ],
+      "manifestSha256": "f8c175738853d31c9f3a0f1d18059297415a01679b588c9994cf704fb98b0eba",
+      "resultsSha256": "0ea47f5ce313f0fe40f111d5aa9a640a9900a9a04f1a0878947a128fe6ca9c0d"
+    },
+    "dev-grouped-1": {
+      "summary": [
+        {
+          "arm": "local",
+          "workload": "overall",
+          "runs": 10,
+          "passed": 10,
+          "wrongAccept": 0,
+          "direct": 8,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 714.3298330000034,
+          "p95": 8922.267417000003,
+          "meanInputTokens": 20530
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 10,
+          "passed": 10,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 3165.4588330000006,
+          "p95": 6439.755792,
+          "meanInputTokens": 2813
+        },
+        {
+          "arm": "grouped",
+          "workload": "overall",
+          "runs": 10,
+          "passed": 10,
+          "wrongAccept": 0,
+          "direct": 8,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1449.0939160000016,
+          "p95": 10318.034249999997,
+          "meanInputTokens": 8358.6
+        }
+      ],
+      "manifestSha256": "cf2d641af6c357a1e2d6149e0da09e51b58bb389d4a023205cadb99fd4b3582c",
+      "resultsSha256": "399683af115001e00473cb50837987dd29e3950ee53142d2112ac860f1852ca7"
+    },
+    "dev-runtime-1": {
+      "summary": [
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 22,
+          "wrongAccept": 6,
+          "direct": 20,
+          "fallback": 8,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1303.5082089999996,
+          "p95": 4364.305042000007,
+          "meanInputTokens": 8656.642857142857
+        },
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 26,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 726.7828749999971,
+          "p95": 7681.804666,
+          "meanInputTokens": 15107.857142857143
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 28,
+          "passed": 28,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1803.914582999998,
+          "p95": 19227.671375000005,
+          "meanInputTokens": 2616.4285714285716
+        }
+      ],
+      "manifestSha256": "6268a7a8422c1b569c66ed9e85efafd8c92dea779ae5fef51bdb89f065cc27d4",
+      "resultsSha256": "1fb039d3601de04ffe8006faa34e6253400d3c9ef0f8fbb079041c69ae1981b3"
+    },
+    "confirmation-replay-1": {
+      "summary": [
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 22,
+          "wrongAccept": 4,
+          "direct": 18,
+          "fallback": 8,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1522.3991249999963,
+          "p95": 7861.672957999999,
+          "meanInputTokens": 12158.153846153846
+        },
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 24,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1449.8594999999987,
+          "p95": 5798.386375000002,
+          "meanInputTokens": 18636.076923076922
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1737.7459579999995,
+          "p95": 19440.733708,
+          "meanInputTokens": 3495.5384615384614
+        }
+      ],
+      "manifestSha256": "1fa547b44910b823a0896c387468daf012037de3dbcad97ebece227d35e39727",
+      "resultsSha256": "8620b211e2b47868390491091f5e3b0b3d63a2a951d58b3d73a4e87e24a3c90a"
+    },
+    "confirmation-flash-replay-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 22,
+          "fallback": 4,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 658.9365830000024,
+          "p95": 4723.173040999998,
+          "meanInputTokens": 19057.46153846154
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1699.4090419999993,
+          "p95": 19259.612792,
+          "meanInputTokens": 3495.5384615384614
+        }
+      ],
+      "manifestSha256": "49fbca4f3454d012e8c9ed3da18f8407afa5ad30744ae3ae1e03a27a12769c30",
+      "resultsSha256": "7f07c5e4d4ac9b34397264ad4ac37be8267420bf7b70b8dc2519f18e7ad41785"
+    },
+    "confirmation-live-2": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 24,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1832.654125000001,
+          "p95": 5985.958708000006,
+          "meanInputTokens": 18638.69230769231
+        },
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 22,
+          "wrongAccept": 4,
+          "direct": 18,
+          "fallback": 8,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1653.8371669999997,
+          "p95": 5205.119458000001,
+          "meanInputTokens": 12161.615384615385
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1757.5846249999995,
+          "p95": 18766.031125,
+          "meanInputTokens": 3495.5
+        }
+      ],
+      "manifestSha256": "14746e5e23d6598f2a03f8069c5d823b20da72f908e1f7400328c326787f3ed3",
+      "resultsSha256": "b5e961f5bda7720b132635a8584cf2a1119fae79bbe53e65769049a5ad7074ab"
+    },
+    "confirmation-flash-live-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 21,
+          "fallback": 5,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 880.9420840000093,
+          "p95": 5349.1502499999915,
+          "meanInputTokens": 19272.846153846152
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 26,
+          "passed": 26,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1797.9610840000023,
+          "p95": 20476.924415999994,
+          "meanInputTokens": 3495.5
+        }
+      ],
+      "manifestSha256": "bf2bf1adde7d40e3b1eaffd5f6eeca414ac66a29fdf6419b38e5939e7d71acb8",
+      "resultsSha256": "9482ac7fabe6e3116de277c7182acdb257af8cd3eab5cda5b5e8b90d87638ef5"
+    },
+    "provider-jev-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 13,
+          "passed": 13,
+          "wrongAccept": 0,
+          "direct": 10,
+          "fallback": 3,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 612.7862500000001,
+          "p95": 9456.291667000001,
+          "meanInputTokens": 26418.23076923077
+        }
+      ],
+      "manifestSha256": "4b5e6f699fdd0d9593f8501ff90b4572c3ec75c7cea72f121f5d369f05327592",
+      "resultsSha256": "1d7272abb17f775382e62f18cd96138c7203f42d643e8f70fc7b9393a313e658"
+    },
+    "provider-clef-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 13,
+          "passed": 13,
+          "wrongAccept": 0,
+          "direct": 7,
+          "fallback": 6,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 3360.4115420000016,
+          "p95": 7366.324583000001,
+          "meanInputTokens": 25395.076923076922
+        }
+      ],
+      "manifestSha256": "e3ea06ecddba028a223b163362c085433414bcbc70de73bc2ea105f1dff11e91",
+      "resultsSha256": "fc9795178bc99da5ca5c3e6b8adcc24def50126acdefee890841d83b239d1abe"
+    },
+    "confirmation2-replay-v2": {
+      "summary": [
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 20,
+          "passed": 18,
+          "wrongAccept": 2,
+          "direct": 12,
+          "fallback": 8,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1251.1245420000014,
+          "p95": 5380.341416,
+          "meanInputTokens": 9099.4
+        },
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 20,
+          "passed": 20,
+          "wrongAccept": 0,
+          "direct": 18,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 755.8498749999999,
+          "p95": 5603.83425,
+          "meanInputTokens": 19169.2
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 20,
+          "passed": 20,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1660.0133750000005,
+          "p95": 3591.5126669999954,
+          "meanInputTokens": 3459.8
+        }
+      ],
+      "manifestSha256": "5c25c9a11b2fdeae8079df8f3b85459278c87c5df4eb046b69d43901b6004766",
+      "resultsSha256": "fbb9c39ff64ed9fb96cbfd443426d4698890aa3d0206588497b7fc1812658096"
+    },
+    "confirmation2-flash-live-v2": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 20,
+          "passed": 20,
+          "wrongAccept": 0,
+          "direct": 16,
+          "fallback": 4,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 447.9457079999993,
+          "p95": 5213.158209000001,
+          "meanInputTokens": 20028.7
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 20,
+          "passed": 20,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1743.7550420000043,
+          "p95": 5089.280291000003,
+          "meanInputTokens": 3470.7
+        }
+      ],
+      "manifestSha256": "796b51d3304021a31828b96ce66e4d84a6a78d0fbfed90866373695d1f17ab74",
+      "resultsSha256": "e0438d76000d5f98c62cc0521fc6fa642c6eb1bbb1427e30d549c157b708ad03"
+    },
+    "confirmation3-replay-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 22,
+          "passed": 22,
+          "wrongAccept": 0,
+          "direct": 20,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 586.1832080000004,
+          "p95": 2292.647582999998,
+          "meanInputTokens": 2371.909090909091
+        },
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 22,
+          "passed": 22,
+          "wrongAccept": 0,
+          "direct": 16,
+          "fallback": 6,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1096.2394999999997,
+          "p95": 3942.3703339999993,
+          "meanInputTokens": 2118.909090909091
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 22,
+          "passed": 22,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1415.9820420000033,
+          "p95": 2620.9722919999995,
+          "meanInputTokens": 776.9090909090909
+        }
+      ],
+      "manifestSha256": "9f241faa5c91c65c596e581e978dadd0b3486a7a16d28861821f5a7eac559484",
+      "resultsSha256": "93ecd00a64dcfc0ba8d09f8e1815f9165b1b553c4acda57d23e27a760850e12e"
+    },
+    "confirmation3-flash-live-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 22,
+          "passed": 22,
+          "wrongAccept": 0,
+          "direct": 20,
+          "fallback": 2,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 437.2525830000013,
+          "p95": 1965.2676250000004,
+          "meanInputTokens": 2372.090909090909
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 22,
+          "passed": 22,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1426.2956669999985,
+          "p95": 2233.3309579999986,
+          "meanInputTokens": 776.9090909090909
+        }
+      ],
+      "manifestSha256": "58ce5aac2ad57ee4180c72e392828094745a8001fea5b642300301dc9a026e38",
+      "resultsSha256": "9da80ae08962c19d853ea9fe92c0dbedde89b0dbe1cf9e04f99acfb336363f77"
+    },
+    "confirmation3-default-live-1": {
+      "summary": [
+        {
+          "arm": "runtime",
+          "workload": "overall",
+          "runs": 11,
+          "passed": 11,
+          "wrongAccept": 0,
+          "direct": 10,
+          "fallback": 1,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 587.8142920000028,
+          "p95": 2902.043292000002,
+          "meanInputTokens": 2371.3636363636365
+        },
+        {
+          "arm": "legacy",
+          "workload": "overall",
+          "runs": 11,
+          "passed": 11,
+          "wrongAccept": 0,
+          "direct": 8,
+          "fallback": 3,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1672.5637920000008,
+          "p95": 4250.566500000001,
+          "meanInputTokens": 2119.818181818182
+        },
+        {
+          "arm": "luna",
+          "workload": "overall",
+          "runs": 11,
+          "passed": 11,
+          "wrongAccept": 0,
+          "direct": 0,
+          "fallback": 0,
+          "falseEmpty": 0,
+          "errors": 0,
+          "p50": 1570.283915999993,
+          "p95": 2881.499083999999,
+          "meanInputTokens": 776.9090909090909
+        }
+      ],
+      "manifestSha256": "2324a344b9e567db1202f0ed28e65fdf51dd813fd24a74e8cb9527b737b405dd",
+      "resultsSha256": "5517a9837b022d89d3824a8b03db48d5c9d585b1d8fed788d68e3f42e54af31b"
+    }
+  },
+  "controls": {
+    "passed": 25,
+    "total": 25,
+    "manifestSha256": "80dcf2de67bd9b2010a14f07af0c5a319c1afe5dad065a7fb3bc9586c5d0e0f7"
+  },
+  "mutations": {
+    "runtime": {
+      "passed": 6,
+      "total": 6
+    },
+    "legacy": {
+      "passed": 0,
+      "total": 6
+    },
+    "luna": {
+      "passed": 0,
+      "total": 6
+    }
+  },
+  "validation": {
+    "unitPassed": 2612,
+    "pythonPassed": 1115,
+    "browserAndPackageContractPassed": 46,
+    "excluded": "published cross-version network test",
+    "typescript": [
+      "extension",
+      "sdk-ts",
+      "protocol",
+      "observe scripts"
+    ],
+    "generationConsistency": true,
+    "builds": [
+      "extension",
+      "sdk-ts"
+    ]
+  },
+  "caveats": [
+    "Small task batches; repeated rounds do not create independent pages.",
+    "Earlier grader corrections and diagnostic failures are preserved; use versioned results.",
+    "Final fresh 3-domain batch includes Selenium, previously used for act; Sauce Demo and GlobalsQA were unused in observe.",
+    "OpenAI Decisions researched but not implemented or benchmarked.",
+    "Default remains pplx-decider-v1.3. Flash is an explicit model choice."
+  ],
+  "sourceArchive": {
+    "manifest": "vendor-repos/system-one-corpus/runs/observe/final-source-20261116/manifest.json",
+    "sha256": "700653d26a6d0524b92684118d1c626dc8521e757b0b0111932466e501884482",
+    "bundleSha256": "959a9ce82aaab56f494c306c327f58a52ea965c91b7962f46c134c5f9c931a5c"
+  }
+}

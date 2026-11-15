@@ -1,5 +1,7 @@
 # Experimental record extraction
 
+Observe research, live results and reproduction commands are in [docs/OBSERVE_RESULTS.md](./docs/OBSERVE_RESULTS.md). The scripts under `observe/` keep their own snapshots, labels and baselines.
+
 The public configuration now needs only provider credentials and an optional model. Historical `map`, `plans`, and tree comparisons below belong to the recorded baseline. See [cleanup status and current reproduction](./docs/CLEANUP_RESULTS.md).
 
 Agent handoff docs: [docs/INDEX.md](./docs/INDEX.md) (review, next steps, evaluation, architecture, roadmap, directions).

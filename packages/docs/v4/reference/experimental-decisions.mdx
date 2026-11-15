@@ -8,14 +8,16 @@ icon: "flask"
   Experimental. The surface, its configuration, and its behavior may change between releases.
 </Warning>
 
-Configure `experimentalDecisions`, then call its `act()` or `extract()` methods. Stagehand builds
+Configure `experimentalDecisions`, then call its `act()`, `observe()` or `extract()` methods. Stagehand builds
 bounded choices from page evidence, asks the decision model to select, and uses the configured LLM
 when the request cannot be resolved safely. The methods accept the same arguments and return the
 same result shapes as their ordinary counterparts.
 
 `act()` selects complete click or literal-fill actions and checks the target before input. Other
 operations use the ordinary LLM pipeline. `extract()` maps schema fields to page records and copies
-values, with schema and evidence checks. `observe()` retains the existing decision-model implementation with LLM fallback. You do not select an action or extraction policy.
+values, with schema and evidence checks. `observe()` selects one target or classifies every candidate in a matching set, with
+explicit abstention and a fresh evidence check. Without an instruction it enumerates interactive
+controls without model inference. You do not select an action or extraction policy.
 
 The ordinary methods on the Stagehand instance never call the decision provider. A namespace call
 without configuration fails. LLM fallback needs an ordinary model configuration or the existing
@@ -51,7 +53,7 @@ and rejected by configuration validation.
 | --- | --- | --- |
 | `provider` | `"perplexity"` | `"perplexity"`, `"typesafe"`, or `"cloudflare"`. |
 | `apiKey` | required | The decision provider's API key. |
-| `model` | provider default | A supported decision model used for both operations. |
+| `model` | provider default | A supported decision model used for all three operations. |
 | `apiUrl` | provider endpoint | An HTTPS endpoint override, without query or fragment. |
 | `accountId` | none | Cloudflare account ID, required unless `apiUrl` supplies the account-scoped endpoint. |
 
@@ -263,7 +265,7 @@ const result = await stagehand.experimentalDecisions.act("Click the sign in butt
 
 ## observe()
 
-Resolved by the decision model first, with the LLM pipeline as fallback. Arguments and result are those of the method of the same name on the Stagehand instance.
+Uses bounded decision questions for supported controls, links and headings, with ordinary LLM fallback for uncertainty, unsupported content or arguments, custom system instructions, and page evidence that changes during inference. Candidate limits cause fallback instead of a shortened result. Arguments and results match the ordinary method.
 
 Find candidate actions on the page from an optional instruction.
 
@@ -767,7 +769,7 @@ result = await stagehand.experimental_decisions.act("Click the sign in button")
 
 ## observe()
 
-Resolved by the decision model first, with the LLM pipeline as fallback. Arguments and result are those of the method of the same name on the Stagehand instance.
+Uses bounded decision questions for supported controls, links and headings, with ordinary LLM fallback for uncertainty, unsupported content or arguments, custom system instructions, and page evidence that changes during inference. Candidate limits cause fallback instead of a shortened result. Arguments and results match the ordinary method.
 
 Find candidate actions on the page from an optional instruction.
 

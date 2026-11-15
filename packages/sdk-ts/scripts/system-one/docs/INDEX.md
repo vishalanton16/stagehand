@@ -1,6 +1,6 @@
 # System One docs
 
-Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+Act, extract and observe cleanup is complete. See [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md) for the retained contract and [OBSERVE_RESULTS.md](./OBSERVE_RESULTS.md) for observe measurements. Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
 
 Status and handoff for experimental System One support. Extraction (`extract: "map"`) uses one decision model with an LLM fallback. The new opt-in `act: "plans"` has [live action results](./ACT_RESULTS.md) and a [measurement plan](./ACT_EXPERIMENTS.md). The extraction measurements below remain separate.
 
@@ -18,6 +18,8 @@ Status and handoff for experimental System One support. Extraction (`extract: "m
 | [ACT_RESULTS.md](./ACT_RESULTS.md)                     | Complete-action selection, failed confirmation, guard fixes, and final live comparisons |
 | [ACT_PROVIDER_RESEARCH.md](./ACT_PROVIDER_RESEARCH.md) | Current Jev, Clef/Clairic and Decider contracts and hypotheses                          |
 | [ACT_DESIGN_AUDIT.md](./ACT_DESIGN_AUDIT.md)           | OpenAI Decisions, older PRs, and assumptions to test                                    |
+
+Observe now has a separate measured implementation. Read [OBSERVE_RESULTS.md](./OBSERVE_RESULTS.md), [the experiment protocol](./OBSERVE_EXPERIMENTS.md), [TypeSafe/Cloudflare research](./OBSERVE_TYPESAFE_CLOUDFLARE_RESEARCH.md), and [OpenAI/Perplexity research](./OBSERVE_OPENAI_PERPLEXITY_RESEARCH.md). Act/extract results below remain separate.
 
 Also read:
 

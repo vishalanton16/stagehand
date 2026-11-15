@@ -17,7 +17,10 @@ experimentalDecisions: {
 - `extract()` builds record groups and facts, maps fields, copies values with provenance, and
   validates the schema and evidence. Perplexity supplies a bounded Locate second reading for
   scalars. Unsupported schemas or disagreements use a single ordinary LLM extraction call.
-- `observe()` retains the existing decision-model implementation with LLM fallback.
+- `observe()` selects one target or independently classifies every candidate for a matching set.
+  No-instruction discovery enumerates interactive controls. Unsupported requests, unresolved
+  browser evidence or uncertain membership use the ordinary LLM. The candidate universe is
+  captured again before returning to detect replacement, relabeling and added matches.
 
 Perplexity is the default provider, pinned to `pplx-decider-v1.3`. Explicit Flash selection uses
 `pplx-decider-flash-v1.3`. TypeSafe defaults to `jev-1.14.0`; Cloudflare defaults to `clef` and needs
@@ -37,14 +40,16 @@ coverage or calibrated probabilities. An ordinary model or gateway is still need
 | `scalarReader.ts`, `providers.ts`, `client.ts`        | Optional exact-span reading and shared validated provider transport.                |
 | `config.ts`                                           | Internal configuration and policy constants.                                        |
 
+Observation uses `observeCandidates.ts` for evidence and candidate accounting,
+`observeSelection.ts` for bounded decisions, and `observe.ts` for browser/progress integration.
+
 Provider requests share answer validation, aliases, limits, cancellation, timeouts, retry and circuit
 breakers. Locate validates spans against the supplied text. Provider usage is recorded even when
 answer validation fails. Result usage includes decision and fallback work; logs retain the decision
 provider's usage separately. Public usage metadata still aggregates tokens across model families.
 
-The act service no longer uses the historical intent tree or best/strict picker. The existing
-decision observer still imports that legacy dependency chain, retained until observe is evaluated.
-The completion judge and model cache checker are retired. Editable metadata, shared transport and helpers
+The historical intent tree, best/strict picker, old observer, completion judge, readiness,
+WebMCP routing and model cache checker are retired. Editable metadata, shared transport and helpers
 needed by the recent policies remain. Public prototype flags are rejected rather than ignored.
 
 Table-cell selection, compaction and native-reader experiments live in the SDK research scripts.

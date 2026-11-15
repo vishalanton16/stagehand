@@ -1,6 +1,6 @@
 # Branch cleanup results
 
-Partial commit scope, November 15: act/extract cleanup is committed separately. Observe retirement is deferred, including its controller/SDK documentation hunks and the legacy picker, tree, argument and action-pipeline dependencies it still imports. The full-cleanup design and validation below describe the complete working-tree candidate, not the narrower committed runtime. Existing observe behavior remains in the partial commit. Its replacement requires separate frozen-snapshot and live-page evidence.
+Historical partial commit scope, November 15: act/extract cleanup is committed separately. Observe retirement is deferred, including its controller/SDK documentation hunks and the legacy picker, tree, argument and action-pipeline dependencies it still imports. The full-cleanup design and validation below describe the complete working-tree candidate, not the narrower committed runtime. Existing observe behavior remains in the partial commit. Its replacement requires separate frozen-snapshot and live-page evidence.
 
 The partial staged snapshot was validated independently: 2,622 unit/reference/parity tests, 49 artifact/browser tests and 1,115 Python tests passed. Extension/SDK/protocol TypeScript checks, schema/Python generation consistency, extension/SDK builds and scoped lint/format checks passed. The published cross-version network test was excluded. No new live model-quality comparison was run for the partial split.
 
@@ -8,6 +8,27 @@ Cleanup started from `9080038614bcaf5ee32afad44970f282ad0c73bd`, after the impor
 stack and the recent extraction/action experiments. The scope and removal criteria are in
 [cleanup_branch.md](../../../../../cleanup_branch.md). This is a cleanup report, not a release
 certificate or a new independent accuracy benchmark.
+
+## Observe cleanup, November 16
+
+The remaining cleanup replaces the prototype observer and removes its last imports of the old
+picker and action pipeline. `observeCandidates.ts` owns candidate evidence and accounting,
+`observeSelection.ts` owns bounded target/set decisions, and `observe.ts` owns browser captures,
+deadlines and evidence revalidation. Production no longer imports the retired `pick.ts`,
+`pipeline.ts`, `pageState.ts`, `toolAct.ts` or `tools.ts` modules. Shared snapshot descriptions,
+argument helpers and provider transport remain because the retained policies use them.
+
+The [observe report](./OBSERVE_RESULTS.md) preserves provider research, hypotheses, rejected
+policies, original and corrected graders, frozen replays and public SDK comparisons. Final default
+Decider live confirmation passed 11/11 with ten direct results and one fallback, versus the old
+observer's 11/11 with eight direct and three fallbacks. Explicit Flash passed 22/22 with 20 direct
+results; its paired Luna control also passed 22/22. These are workload results, not release parity.
+
+The measured implementation passed 2,612 unit/reference/parity tests, 1,115 Python tests and 46
+browser/package tests, plus TypeScript checks, generation consistency, lint/format and builds.
+The published cross-version network test was excluded. The exact-source archive and raw runs
+remain in `vendor-repos/system-one-corpus/runs/observe/`; the committed result manifest records
+their hashes. Final cleanup changes status documentation without changing measured runtime code.
 
 ## Current contract
 
@@ -22,6 +43,7 @@ const stagehand = await Stagehand.create({
 });
 
 await stagehand.experimentalDecisions.act(instruction, { page });
+await stagehand.experimentalDecisions.observe(instruction, { page });
 await stagehand.experimentalDecisions.extract(instruction, schema, { page });
 ```
 
@@ -32,7 +54,7 @@ Python has the same contract with snake_case names.
 
 There are no public `plans`, `map`, confidence, verification, retry, readiness, tool-routing or
 fallback switches. Obsolete options fail validation. Policy selection and mandatory checks are
-internal. One supplied decision model applies to both action and extraction.
+internal. One supplied decision model applies to act, observe and extract.
 
 - Actions enumerate complete clicks and literal fills. Other operations or unresolved selections
   use the ordinary configured LLM. Selection checks identity, eligibility and evidence. Successful
@@ -40,11 +62,13 @@ internal. One supplied decision model applies to both action and extraction.
 - Extraction maps fields to records/facts, copies values, checks the schema and evidence, and uses
   one ordinary LLM extraction call when needed. Perplexity's bounded scalar reader uses the same
   validated transport as choices and predicates, including exact-span validation.
-- Observation in the namespace delegates to ordinary LLM observation for compatibility.
+- Observation selects one target or independently classifies all candidates for a complete set.
+  Discovery without an instruction enumerates interactive controls. Uncertainty, unsupported
+  requests and changed evidence use ordinary LLM observation.
 - Ordinary Stagehand calls receive no experimental action configuration. Ordinary extraction keeps
   the previously measured single-call change.
-- A decision key alone can resolve supported direct actions and extractions. Missing LLM credentials
-  become an explicit error when fallback is needed. Observation always needs an LLM or gateway.
+- A decision key alone can resolve supported direct actions, observations and extractions. Missing
+  LLM credentials become an explicit error when fallback is needed.
 
 ## Retained and retired code
 

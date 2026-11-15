@@ -1,0 +1,11 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "types": ["node", "chrome"],
+    "noEmit": true
+  },
+  "include": ["./*.ts"]
+}

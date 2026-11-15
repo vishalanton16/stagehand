@@ -191,8 +191,9 @@ class Stagehand:
 
     @property
     def experimental_decisions(self) -> ExperimentalDecisions:
-        """Experimental: act, observe and extract resolved by a decision model
-        instead of an LLM call. Requires `experimental_decisions` in `create()`.
+        """Experimental actions, observation and extraction with automatic LLM fallback.
+
+        Requires `experimental_decisions` in `create()`.
         """
         if self._decisions is None:
             self._decisions = ExperimentalDecisions(

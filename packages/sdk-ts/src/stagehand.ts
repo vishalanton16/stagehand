@@ -121,8 +121,7 @@ export class Stagehand {
   }
 
   /**
-   * Experimental: act, observe and extract resolved by a decision model
-   * instead of an LLM call. Requires `experimentalDecisions` in `create()`.
+   * Experimental decisions for act, observe and extract, with automatic LLM fallback. Requires `experimentalDecisions` in `create()`.
    */
   get experimentalDecisions(): ExperimentalDecisions {
     this.decisions ??= new ExperimentalDecisions({

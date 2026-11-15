@@ -611,7 +611,7 @@ class EmptyParams(WireModel):
 
 
 class ExperimentalDecisionsConfig(WireModel):
-    """Experimental: configures stagehand.experimentalDecisions, whose act(), observe() and extract() are resolved by a decision model (typed questions answered with probabilities) and fall back to the LLM pipeline when it is not confident"""
+    """Experimental decision models for act(), observe() and extract(), with automatic LLM fallback. Defaults to Perplexity Decider v1.3."""
 
     model_config = ConfigDict(
         extra="forbid",

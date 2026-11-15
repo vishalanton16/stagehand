@@ -28,13 +28,10 @@ ResultModel = TypeVar("ResultModel", bound=BaseModel)
 
 
 class ExperimentalDecisions:
-    """`stagehand.experimental_decisions`: act, observe and extract resolved by a
-    decision model (typed questions answered with probabilities, a few hundred
-    milliseconds each) instead of an LLM call, falling back to the LLM when the
-    model is not confident. Same arguments and results as the methods on
-    `Stagehand`; requires `experimental_decisions` in `Stagehand.create()`.
+    """Experimental actions, observation and extraction with automatic LLM fallback.
 
-    Experimental: the surface and its behaviour may change between releases.
+    Requires `experimental_decisions`
+    in `Stagehand.create()`. Arguments and results match the ordinary methods.
     """
 
     def __init__(
