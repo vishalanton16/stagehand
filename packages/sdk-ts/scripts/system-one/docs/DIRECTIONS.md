@@ -18,12 +18,12 @@ This is the main path in ROADMAP.md Phases 0–2.
 
 Decider already supports Jev-like choice/noul **and** Locate (blog: [Perplexity Decider](https://www.perplexity.ai/hub/blog/perplexity-decider)). Use that:
 
-| Variant | Idea | Risk |
-| --- | --- | --- |
-| Locate as check only | Current `readerChecks: true` | Latency; exact `sameValue` over-escalates |
-| Locate as primary for scalars | Override choice with Locate when sheet-grounded | Loses choice context when sheet is incomplete |
-| Pointwise noul per candidate group | Current group cross-check | False alarms escalate good answers |
-| Isolated multi-question packs | Fold more questions into one request | Harder debugging; must keep isolation |
+| Variant                            | Idea                                            | Risk                                          |
+| ---------------------------------- | ----------------------------------------------- | --------------------------------------------- |
+| Locate as check only               | Current `readerChecks: true`                    | Latency; exact `sameValue` over-escalates     |
+| Locate as primary for scalars      | Override choice with Locate when sheet-grounded | Loses choice context when sheet is incomplete |
+| Pointwise noul per candidate group | Current group cross-check                       | False alarms escalate good answers            |
+| Isolated multi-question packs      | Fold more questions into one request            | Harder debugging; must keep isolation         |
 
 Prefer measuring A/B on **wrong accepts** and escalate rate, not pass rate alone.
 
@@ -75,4 +75,4 @@ Decider v1.3 discusses attention patterns (isolated questions vs cacheable state
 - Site- or task-named branches in `dataView` / `mapCopy`
 - Thresholds tuned on a single held-out (confidence cutoffs that only fit Jev or only fit held4)
 - Claiming cost wins from warm prompt cache
-- Expanding into `act` / `observe` before `extract: "map"` has an honest held5 bar
+- Changing the SDK's `act` / `observe` defaults based on extraction or fixture scores alone. Action research now follows its own [live-page experiment plan](./ACT_EXPERIMENTS.md).

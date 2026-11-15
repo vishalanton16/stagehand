@@ -8,6 +8,8 @@ The experimental SDK uses the dual list gate and a single Luna fallback call. Or
 
 Compaction cut the uncached cost of the Decider cascade by 39%. Removing the log-only completion call then brought cascade p95 down to 3.61 s. Single-call Luna was faster at 2.81 s p95. Confirm both paths on fresh live pages. Treat Decider as a cost-saving candidate until it meets the single-call latency baseline. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
 
+Action research proceeds independently under [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md). Capture a few live-page states, freeze target and outcome graders, compare one hypothesis against paired baselines, then execute promising variants live. Known-operation resolution and free-form `act()` have separate comparisons. No action default changes follow from extraction scores.
+
 ## Phase 0 — Stabilize the production path (now)
 
 **Goal:** `extract: "map"` is correct, measurable and reviewable.
@@ -65,7 +67,7 @@ Exit when:
 - metadata exposes accept vs fallback (so `runtimeMap` need not count LLM calls)
 - usage splits decision vs LLM tokens
 - default recommendation: Perplexity Decider + LLM fallback; other providers documented as weaker gates without Locate
-- observe / act remain out of scope unless separately designed
+- action resolver changes require the separate [action evidence gates](./ACT_EXPERIMENTS.md#evidence-and-iteration-rules)
 
 ## Phase 5 — Widen or default (later)
 

@@ -9,6 +9,10 @@ The SDK keeps Decider's current mapper and one Luna fallback. The table-cell rou
 
 Completed experiments and archived implementations are linked from [the cleanup record](./DECISION_PRIMITIVES.md#active-extraction-paths). Scalar agreement strictness and the list tail-latency regression remain open in the [implementation status](./INDEX.md#plan-status).
 
+## Action experiments
+
+Follow [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md) independently of the extraction queue. Start by capturing five live pages and freezing action graders. Compare known-operation target selection on identical snapshots before testing free-form `act()`. Run promising variants live and grade actual targets and postconditions. Each fix turns the affected set into regression evidence; confirmation needs fresh pages.
+
 ## 9. Split into a reviewable stack
 
 Suggested order, each PR targeting the previous one (see AGENTS.md):

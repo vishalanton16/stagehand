@@ -1,6 +1,6 @@
 # System One docs
 
-Status and handoff for experimental System One extraction (`extract: "map"`). The runtime uses one decision model with an LLM fallback.
+Status and handoff for experimental System One support. The measured SDK work below concerns extraction (`extract: "map"`), using one decision model with an LLM fallback. The existing experimental `act()` path has a separate [live-page experiment plan](./ACT_EXPERIMENTS.md); it has no new results yet.
 
 | Doc                                                | Purpose                                                                      |
 | -------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -12,6 +12,7 @@ Status and handoff for experimental System One extraction (`extract: "map"`). Th
 | [DIRECTIONS.md](./DIRECTIONS.md)                   | Alternatives and experiments that are deliberately _not_ the product default |
 | [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md)     | Provider research and the next evidence-ranking experiment                   |
 | [DECISION_PRIMITIVES.md](./DECISION_PRIMITIVES.md) | Provider contracts, abstention experiments, and scalar span results          |
+| [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md)         | Live-page snapshots, action hypotheses, paired baselines, and outcome checks |
 
 Also read:
 
@@ -30,7 +31,7 @@ Also read:
 | 6. Choose cross-check strictness      | Partial | Retained normalized exact comparison for scalars and strict validation of required list fields. Locate returned day fragments for Eiffel Tower dates. A controlled exact-versus-containment comparison remains open. |
 | 7. Run fresh heldout 5                | Done    | Six new sites, two rounds each. Decider and Flash each scored 10/12. Both misses per model came from the same ambiguous temperature page.                                                                            |
 | 8. Measure real pages through the SDK | Done    | Three sites, two rounds each. Decider passed 6/6 with zero fallbacks, and Luna passed 4/6. Decider had higher p50 and p95 latency.                                                                                   |
-| 9. Prepare a reviewable stack         | Pending | The local branch contains the extraction stack. The suggested PR split is in [NEXT_STEPS.md](./NEXT_STEPS.md#9-split-into-a-reviewable-stack).                   |
+| 9. Prepare a reviewable stack         | Pending | The local branch contains the extraction stack. The suggested PR split is in [NEXT_STEPS.md](./NEXT_STEPS.md#9-split-into-a-reviewable-stack).                                                                       |
 
 ## Measurements
 
