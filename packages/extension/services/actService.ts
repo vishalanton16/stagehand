@@ -27,6 +27,7 @@ import { type Progress, runWithProgress } from "../understudy/progress.js";
 import { trimTrailingTextNode } from "../utils.js";
 import * as cacheService from "./cacheService.js";
 import { checkCachedAction } from "./decisions/cacheCheck.js";
+import { guardActionTarget } from "./decisions/actionGuard.js";
 import {
   runDecisionsAct,
   type DecisionsConfig,
@@ -399,6 +400,7 @@ async function actWithProgress(
       action: firstInference.action,
       variables,
       context,
+      expectedElementId: firstInference.response.element?.elementId,
     });
 
     if (!firstInference.response.twoStep) {
@@ -442,6 +444,7 @@ async function actWithProgress(
       action: secondInference.action,
       variables,
       context,
+      expectedElementId: secondInference.response.element?.elementId,
     });
 
     return actResult(
@@ -596,10 +599,12 @@ async function takeDeterministicAction({
   action,
   variables,
   context,
+  expectedElementId,
 }: {
   action: Action;
   variables?: Variables;
   context: ActContext;
+  expectedElementId?: string;
 }): Promise<ActResultData> {
   context.progress.throwIfStopped();
   const method = action.method?.trim();
@@ -614,6 +619,22 @@ async function takeDeterministicAction({
       actionDescription: action.description || `Action (${method ?? "unknown"})`,
       actions: [],
     };
+  }
+
+  if (context.decisions?.act === "plans") {
+    const rejection = await guardActionTarget(
+      context.page,
+      action,
+      context.progress,
+      expectedElementId,
+    );
+    if (rejection)
+      return {
+        success: false,
+        message: `Failed to perform act: ${rejection}`,
+        actionDescription: action.description,
+        actions: [],
+      };
   }
 
   const placeholderArgs = Array.isArray(action.arguments) ? [...action.arguments] : [];
@@ -708,6 +729,21 @@ async function selfHealAction({
 
     const selector = inferenceResult.action?.selector ?? action.selector;
     context.progress.throwIfStopped();
+    if (context.decisions?.act === "plans") {
+      const rejection = await guardActionTarget(
+        context.page,
+        { ...action, method, selector },
+        context.progress,
+        inferenceResult.response.element.elementId,
+      );
+      if (rejection)
+        return {
+          success: false,
+          message: `Failed to self-heal act: ${rejection}`,
+          actionDescription: action.description,
+          actions: [],
+        };
+    }
     await performUnderstudyMethod(
       context.page,
       context.page.mainFrame(),

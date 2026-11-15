@@ -11,7 +11,7 @@ Completed experiments and archived implementations are linked from [the cleanup 
 
 ## Action experiments
 
-Follow [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md) independently of the extraction queue. Start by capturing five live pages and freezing action graders. Compare known-operation target selection on identical snapshots before testing free-form `act()`. Run promising variants live and grade actual targets and postconditions. Each fix turns the affected set into regression evidence; confirmation needs fresh pages.
+The [complete-action policy](./ACT_RESULTS.md) passed its second fresh live batch with Decider and the subsequent paired Flash comparison. It remains opt-in as `act: "plans"`. The current evidence covers bounded clicks and literal fills with Luna fallback, plus two short workflows. Next, broaden rich editors, frames, ambiguous instructions and multi-step actions. Keep the [frozen-label protocol](./ACT_EXPERIMENTS.md) and the old tree/Luna controls. Cache healing, vision and readiness still need separate experiments.
 
 ## 9. Split into a reviewable stack
 

@@ -1,6 +1,6 @@
 # System One experiments for act()
 
-Status: planned. No new action benchmark results accompany this document. Extraction work through `41055259d` is committed. The SDK already has an experimental action pipeline; recent experiments concentrated on extraction.
+Status: the initial research, frozen replay, live comparisons, mutation checks and two workflows are complete. See [ACT_RESULTS.md](./ACT_RESULTS.md) for outcomes and limitations. Research added a complete-action choice experiment beyond the original target-only plan below. The protocol remains the reference for further batches.
 
 The question is whether a decision model can resolve browser actions with fewer tokens or less latency than Luna, without accepting more wrong actions. Start with a few live pages, freeze their snapshots, test one hypothesis, execute promising variants live, and repeat. Keep extraction's [fresh comparison](./NEXT_STEPS.md#current-experiment-order) as an independent task.
 

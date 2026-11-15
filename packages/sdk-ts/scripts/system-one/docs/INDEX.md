@@ -1,18 +1,21 @@
 # System One docs
 
-Status and handoff for experimental System One support. The measured SDK work below concerns extraction (`extract: "map"`), using one decision model with an LLM fallback. The existing experimental `act()` path has a separate [live-page experiment plan](./ACT_EXPERIMENTS.md); it has no new results yet.
+Status and handoff for experimental System One support. Extraction (`extract: "map"`) uses one decision model with an LLM fallback. The new opt-in `act: "plans"` has [live action results](./ACT_RESULTS.md) and a [measurement plan](./ACT_EXPERIMENTS.md). The extraction measurements below remain separate.
 
-| Doc                                                | Purpose                                                                      |
-| -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [REVIEW.md](./REVIEW.md)                           | Review of the **uncommitted** production wiring on top of commit `632789220` |
-| [NEXT_STEPS.md](./NEXT_STEPS.md)                   | Ordered engineering tasks with done conditions                               |
-| [EVALUATION.md](./EVALUATION.md)                   | How to measure fairly (held-outs, metrics, what not to claim)                |
-| [ARCHITECTURE.md](./ARCHITECTURE.md)               | How the pipeline works and where the code lives                              |
-| [ROADMAP.md](./ROADMAP.md)                         | Product phases from experiment → default                                     |
-| [DIRECTIONS.md](./DIRECTIONS.md)                   | Alternatives and experiments that are deliberately _not_ the product default |
-| [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md)     | Provider research and the next evidence-ranking experiment                   |
-| [DECISION_PRIMITIVES.md](./DECISION_PRIMITIVES.md) | Provider contracts, abstention experiments, and scalar span results          |
-| [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md)         | Live-page snapshots, action hypotheses, paired baselines, and outcome checks |
+| Doc                                                    | Purpose                                                                                 |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| [REVIEW.md](./REVIEW.md)                               | Review of the **uncommitted** production wiring on top of commit `632789220`            |
+| [NEXT_STEPS.md](./NEXT_STEPS.md)                       | Ordered engineering tasks with done conditions                                          |
+| [EVALUATION.md](./EVALUATION.md)                       | How to measure fairly (held-outs, metrics, what not to claim)                           |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)                   | How the pipeline works and where the code lives                                         |
+| [ROADMAP.md](./ROADMAP.md)                             | Product phases from experiment → default                                                |
+| [DIRECTIONS.md](./DIRECTIONS.md)                       | Alternatives and experiments that are deliberately _not_ the product default            |
+| [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md)         | Provider research and the next evidence-ranking experiment                              |
+| [DECISION_PRIMITIVES.md](./DECISION_PRIMITIVES.md)     | Provider contracts, abstention experiments, and scalar span results                     |
+| [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md)             | Live-page snapshots, action hypotheses, paired baselines, and outcome checks            |
+| [ACT_RESULTS.md](./ACT_RESULTS.md)                     | Complete-action selection, failed confirmation, guard fixes, and final live comparisons |
+| [ACT_PROVIDER_RESEARCH.md](./ACT_PROVIDER_RESEARCH.md) | Current Jev, Clef/Clairic and Decider contracts and hypotheses                          |
+| [ACT_DESIGN_AUDIT.md](./ACT_DESIGN_AUDIT.md)           | OpenAI Decisions, older PRs, and assumptions to test                                    |
 
 Also read:
 

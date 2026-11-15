@@ -10,6 +10,8 @@ import {
 import * as inference from "../inference.js";
 import { StagehandLogger } from "../logger.js";
 import * as actService from "../services/actService.js";
+import { guardActionTarget } from "../services/decisions/actionGuard.js";
+import * as decisionsPipeline from "../services/decisions/pipeline.js";
 import type { Page } from "../understudy/page.js";
 import { Progress } from "../understudy/progress.js";
 
@@ -17,6 +19,7 @@ vi.mock("../handlers/handlerUtils/actHandlerUtils.js", () => ({
   performUnderstudyMethod: vi.fn(),
   waitForDomNetworkQuiet: vi.fn(),
 }));
+vi.mock("../services/decisions/actionGuard.js", () => ({ guardActionTarget: vi.fn() }));
 
 const performAction = vi.mocked(performUnderstudyMethod);
 const waitForQuiet = vi.mocked(waitForDomNetworkQuiet);
@@ -801,3 +804,47 @@ function actPage(frame: object, captureSnapshot: ReturnType<typeof vi.fn>): Page
 function testLogger(): StagehandLogger {
   return new StagehandLogger({ tracer: trace.getTracer("act-service-test") }, () => {});
 }
+
+describe("plan-policy LLM handoff", () => {
+  it("blocks an ineligible Luna fallback before execution or self-heal", async () => {
+    performAction.mockReset();
+    waitForQuiet.mockResolvedValue();
+    const decision = vi
+      .spyOn(decisionsPipeline, "runDecisionsAct")
+      .mockResolvedValueOnce({ kind: "fallback", reason: "action_plan_abstained" });
+    vi.mocked(guardActionTarget).mockResolvedValueOnce("target_disabled");
+    const page = actPage(
+      {},
+      vi.fn(async () => snapshot("0-12", "/html/body/input")),
+    );
+    const result = await actService.act({
+      params: { pageId: "page-1", instruction: "Fill Disabled input", options: { cache: false } },
+      page,
+      model: { source: "client" },
+      clientLLMGenerate: vi.fn(async () =>
+        actGeneration({
+          elementId: "0-12",
+          description: "Disabled input",
+          method: "fill",
+          arguments: ["blocked"],
+        }),
+      ),
+      logger: testLogger(),
+      decisions: { apiKey: "test", act: "plans" },
+      selfHeal: true,
+    });
+    expect(result.data).toMatchObject({
+      success: false,
+      actions: [],
+      message: expect.stringContaining("target_disabled"),
+    });
+    expect(performAction).not.toHaveBeenCalled();
+    expect(guardActionTarget).toHaveBeenCalledWith(
+      page,
+      expect.objectContaining({ method: "fill" }),
+      expect.anything(),
+      "0-12",
+    );
+    decision.mockRestore();
+  });
+});

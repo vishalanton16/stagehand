@@ -24,6 +24,15 @@ from stagehand._validation import (
 )
 
 
+class Act(StrEnum):
+    """
+    Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests
+    """
+
+    tree = "tree"
+    plans = "plans"
+
+
 class ActOptions(WireModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -628,6 +637,8 @@ class ExperimentalDecisionsConfig(WireModel):
         None
     )
     """Cloudflare account id; required for provider "cloudflare\""""
+    act: Optional[Act] = None
+    """Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests"""
     retry_no_effect: Optional[StrictBool] = None
     focus_fallback: Optional[StrictBool] = None
     cache_check: Optional[StrictBool] = None

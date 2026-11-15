@@ -1493,6 +1493,11 @@
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{1,64}$"
         },
+        "act": {
+          "description": "Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests",
+          "type": "string",
+          "enum": ["tree", "plans"]
+        },
         "retry_no_effect": {
           "type": "boolean"
         },

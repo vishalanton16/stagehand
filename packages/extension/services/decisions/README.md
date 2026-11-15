@@ -210,3 +210,20 @@ logs its instruction and a trace of candidate descriptions at info level.
 - No eval exercises page-state fail-fast or `retryNoEffect` end to end; both have unit tests only.
 - Modifier chords, file upload and unquoted `<select>` options on selects with more than 254
   options go to the LLM.
+
+## Complete action selection
+
+`act: "plans"` enables a separate experimental action policy. Stagehand enumerates complete clicks and literal fills, then asks one choice question with explicit no-match. This avoids a separate intent request for those actions. The default remains `"tree"`.
+
+```ts
+experimentalDecisions: {
+  provider: "perplexity",
+  model: "pplx-decider-flash-v1.3",
+  apiKey: process.env.PERPLEXITY_API_KEY!,
+  act: "plans",
+}
+```
+
+Use `stagehand.experimentalDecisions.act(...)`. The selector excludes ineligible controls, includes link destinations and contextual evidence, and checks the chosen node's identity and evidence before input. Execution checks also protect inferred clicks, fills, typing, hovers and native selects during Luna fallback, replay and self-heal. Missing arguments, unsupported operations and uncertain selections use the configured LLM fallback; `llmFallback: false` returns an abstention instead.
+
+This policy keeps up to 30 candidates per operation. Frame/shadow facts it cannot inspect escalate. Tools and early target readiness retain the existing tree when enabled. Provider confidence gates need their own evaluation; the measured recommendation is pinned Perplexity Flash v1.3. See [live results and limits](../../../sdk-ts/scripts/system-one/docs/ACT_RESULTS.md) and [reproduction commands](../../../sdk-ts/scripts/system-one/act/README.md).

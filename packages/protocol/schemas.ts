@@ -1529,6 +1529,12 @@ export const ExperimentalDecisionsConfigSchema = z
       .regex(/^[A-Za-z0-9_-]{1,64}$/)
       .optional()
       .meta({ description: 'Cloudflare account id; required for provider "cloudflare"' }),
+    act: z
+      .enum(["tree", "plans"])
+      .optional()
+      .describe(
+        "Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests",
+      ),
     retryNoEffect: z.boolean().optional(),
     focusFallback: z.boolean().optional(),
     cacheCheck: z.boolean().optional(),

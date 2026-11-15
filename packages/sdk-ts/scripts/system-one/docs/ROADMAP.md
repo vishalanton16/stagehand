@@ -8,7 +8,7 @@ The experimental SDK uses the dual list gate and a single Luna fallback call. Or
 
 Compaction cut the uncached cost of the Decider cascade by 39%. Removing the log-only completion call then brought cascade p95 down to 3.61 s. Single-call Luna was faster at 2.81 s p95. Confirm both paths on fresh live pages. Treat Decider as a cost-saving candidate until it meets the single-call latency baseline. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
 
-Action research proceeds independently under [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md). Capture a few live-page states, freeze target and outcome graders, compare one hypothesis against paired baselines, then execute promising variants live. Known-operation resolution and free-form `act()` have separate comparisons. No action default changes follow from extraction scores.
+Action research proceeds independently under [ACT_EXPERIMENTS.md](./ACT_EXPERIMENTS.md). The opt-in `act: "plans"` now has [paired live results](./ACT_RESULTS.md), including a failed confirmation and the resulting execution guards. Known-operation resolution and free-form `act()` have separate comparisons. Keep the original tree as default while broadening the action workload.
 
 ## Phase 0 — Stabilize the production path (now)
 

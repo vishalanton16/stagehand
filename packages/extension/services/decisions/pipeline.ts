@@ -19,6 +19,8 @@ import {
   substituteVariables,
 } from "./args.js";
 import { invokeTool, type DecisionsToolDeps } from "./toolAct.js";
+import { actionNodes, choosePlan } from "./actionPlans.js";
+import { readFacts } from "./actionFacts.js";
 import { readToolDecision, toolQuestions } from "./tools.js";
 import { blockingSignal, readPageState } from "./pageState.js";
 import {
@@ -65,6 +67,7 @@ export { fillValueCandidates, parseKey, parsePercent } from "./args.js";
  */
 
 export type DecisionsConfig = DecisionModelConfig & {
+  act?: "tree" | "plans";
   /** Minimum confidence before acting on a node's answer. */
   actConfidence?: number;
   /**
@@ -294,6 +297,10 @@ async function decideAndAct(
   // Chords and modifier clicks have no representation in the tree yet.
   if (MODIFIER_CHORD.test(deps.instruction)) return fallback("modifier_chord");
 
+  if (config.act === "plans" && !config.tools && !config.targetReadiness) {
+    return await runActionPlans(config, deps, trace, performed);
+  }
+
   const ctx: PipelineContext = {
     config,
     deps,
@@ -468,6 +475,72 @@ async function decideAndAct(
   if (family.choice === "select") return await runSelect(ctx);
   if (family.choice === "drag") return await runDrag(ctx);
   return fallback(`unsupported_family:${family.choice}`);
+}
+
+async function runActionPlans(
+  config: DecisionsConfig,
+  deps: DecisionsActDeps,
+  trace: TraceEntry[],
+  performed: ActResultData["actions"],
+): Promise<DecisionsActOutcome> {
+  const snap = await snapshot(deps);
+  const facts = await deps.page.evaluate(readFacts, snap.xpathMap);
+  deps.ensureTimeRemaining();
+  const actionSnapshot = {
+    formattedTree: snap.tree,
+    xpathMap: snap.xpathMap,
+    urlMap: {},
+    facts,
+    editableIds: snap.nodes.filter((node) => node.editable).map((node) => node.id),
+    url: deps.page.url(),
+  };
+  snap.nodes = actionNodes(actionSnapshot);
+  const result = await choosePlan(config, actionSnapshot, deps.instruction, {
+    variables: deps.variables,
+    threshold: config.actConfidence ?? DEFAULT_ACT_CONFIDENCE,
+  });
+  trace.push({
+    node: "action_plan",
+    ms: result.response?.durationMs ?? 0,
+    options: result.plans.length,
+    confidence: result.confidence,
+    accepted: Boolean(result.plan),
+    choice: result.plan?.id ?? "none_match",
+    targetId: result.plan?.nodeId ?? "",
+  });
+  if (!result.plan) return fallback("action_plan_abstained");
+  const plan = result.plan;
+  const target = snap.nodes.find((node) => node.id === plan.nodeId);
+  if (!target) return fallback("action_plan_target_missing");
+  const guard = await staysPut(deps, snap, target, plan.method === "click");
+  if (guard.verdict !== "ok") return fallback(`action_plan_target_changed:${guard.verdict}`);
+  const current = await deps.page.evaluate(readFacts, { [target.id]: snap.xpathMap[target.id]! });
+  if (
+    !current[target.id] ||
+    JSON.stringify(current[target.id]) !== JSON.stringify(facts[target.id])
+  ) {
+    return fallback("action_plan_evidence_changed");
+  }
+  const selector = selectorFor(snap, target);
+  if (!selector) return fallback("action_plan_missing_xpath");
+  const ctx: PipelineContext = {
+    config,
+    deps,
+    trace,
+    instruction: deps.instruction,
+    threshold: config.actConfidence ?? DEFAULT_ACT_CONFIDENCE,
+    logger: deps.logger,
+    ensureTimeRemaining: deps.ensureTimeRemaining,
+    performed,
+    redact: redactor(deps.variables),
+  };
+  return await act(
+    ctx,
+    { selector, method: plan.method, arguments: plan.arguments, description: describeLine(target) },
+    plan.method === "fill"
+      ? { expectedValue: substituteVariables(plan.arguments[0]!, deps.variables) }
+      : {},
+  );
 }
 
 /**

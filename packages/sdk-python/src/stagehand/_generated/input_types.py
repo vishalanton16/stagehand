@@ -254,6 +254,7 @@ class ExperimentalDecisionsConfig(TypedDict):
     model: NotRequired[str]
     api_url: NotRequired[str]
     account_id: NotRequired[str]
+    act: NotRequired[Literal["tree", "plans"]]
     retry_no_effect: NotRequired[bool]
     focus_fallback: NotRequired[bool]
     cache_check: NotRequired[bool]
