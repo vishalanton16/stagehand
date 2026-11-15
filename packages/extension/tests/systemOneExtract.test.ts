@@ -104,6 +104,84 @@ describe("System One extract service", () => {
     expect(options.clientLLMGenerate).toHaveBeenCalledTimes(2);
   });
 
+  it("falls back directly to the LLM for a missing selected table cell and keeps its usage", async () => {
+    const mapper = vi.spyOn(mapping, "mapCopyExtract");
+    const options = setup();
+    options.page.captureSnapshot.mockResolvedValue({
+      combinedTree: "[0-1] table",
+      combinedXpathMap: {},
+      combinedUrlMap: {},
+    });
+    const cell = (text: string, header = false) => ({
+      text,
+      header,
+      scope: header ? "col" : "",
+      rowspan: 1,
+      colspan: 1,
+    });
+    const evaluate = vi.fn(async () => [
+      {
+        heading: "Directory",
+        caption: "",
+        rows: [
+          { section: "THEAD", cells: [cell("Team", true), cell("Name", true)] },
+          { section: "TBODY", cells: [cell("Orion"), cell("")] },
+        ],
+      },
+    ]);
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if (typeof init?.body !== "string") throw new TypeError("Expected a JSON request body");
+      const { questions } = JSON.parse(init.body);
+      const criteria = questions.cell0.criteria as Record<string, string>;
+      const choice = Object.keys(criteria).find((key) =>
+        criteria[key]!.includes("| column Name | value (empty)"),
+      );
+      expect(choice).toBeDefined();
+      return Response.json({
+        answers: {
+          cell0: {
+            type: "choice",
+            choice,
+            confidence: 1,
+            probabilities: Object.fromEntries(
+              Object.keys(criteria).map((key) => [key, key === choice ? 1 : 0]),
+            ),
+          },
+        },
+        usage: { input_tokens: 60, output_tokens: 2 },
+      });
+    });
+    const result = await extract({
+      ...options,
+      params: {
+        ...options.params,
+        instruction: "Find the Name listed for the Orion team",
+        schema: z.json().parse(
+          z.toJSONSchema(
+            z.object({
+              name: z.string().describe("Name of the Orion team"),
+            }),
+          ),
+        ),
+      },
+      page: { ...options.page, evaluate },
+      decisions: { ...options.decisions, provider: "perplexity" },
+      tableCellExperiment: true,
+      clientLLMGenerate: async (params) => {
+        const result = await options.clientLLMGenerate(params);
+        const format = params.responseFormat;
+        return format?.type === "json_schema" && format.name === "Metadata"
+          ? result
+          : { ...result, structuredContent: { name: "Example" } };
+      },
+    });
+    expect(result.data).toEqual({ name: "Example" });
+    expect(result.metadata.usage).toMatchObject({ inputTokens: 80, outputTokens: 6 });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mapper).not.toHaveBeenCalled();
+  });
+
   it("respects disabled fallback on provider failure", async () => {
     vi.spyOn(mapping, "mapCopyExtract").mockRejectedValue(new Error("provider unavailable"));
     const options = setup();

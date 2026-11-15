@@ -112,6 +112,7 @@ export async function extractWithDecider({
   progress,
   recordUsage,
   questionStyle = "exact",
+  boundedScalar = false,
 }: {
   params: StagehandExtractParams;
   page: Pick<Page, "captureSnapshot">;
@@ -120,6 +121,7 @@ export async function extractWithDecider({
   progress: Progress;
   recordUsage?: (usage: StagehandResultUsage) => void;
   questionStyle?: "exact" | "source";
+  boundedScalar?: boolean;
 }): Promise<ExtractResult> {
   const { options, instruction } = params;
   if (options?.screenshot) throw new TypeError("Decider locate requires a text snapshot");
@@ -134,7 +136,15 @@ export async function extractWithDecider({
   const task = [systemPrompt, root.description, instruction].filter(Boolean).join("\n");
   const fields = entries.map(([name, node]) => compileField(node, name, task, questionStyle));
   const questions = Object.fromEntries(
-    fields.map(({ name, instructions }) => [name, { type: "locate", instructions }]),
+    fields.map(({ name, instructions }) => [
+      name,
+      {
+        type: "locate",
+        instructions: boundedScalar
+          ? `${instructions}\nCopy only the value as printed. If the requested fact is absent, return no value. Do not calculate it.`
+          : instructions,
+      },
+    ]),
   );
   const validator = z.fromJSONSchema(params.schema as Parameters<typeof z.fromJSONSchema>[0]);
   const { combinedTree: state } = await page.captureSnapshot(
@@ -170,6 +180,7 @@ export async function extractWithDecider({
   recordUsage?.(usage);
 
   const required = new Set(root.required);
+  const codePoints = boundedScalar ? Array.from(state) : undefined;
   const values = Object.fromEntries(
     fields.flatMap(({ name, type, list, nullable }) => {
       if (!Object.hasOwn(result.answers, name))
@@ -178,6 +189,28 @@ export async function extractWithDecider({
       const ordered = list
         ? spans.toSorted((a, b) => a.start - b.start)
         : spans.toSorted((a, b) => b.score - a.score);
+      if (codePoints) {
+        const span = ordered[0];
+        if (!span) {
+          if (required.has(name)) throw new Error(`missing_required_span:${name}`);
+          return [];
+        }
+        if (
+          span.start >= span.end ||
+          span.end > codePoints.length ||
+          codePoints.slice(span.start, span.end).join("") !== span.text
+        )
+          throw new Error(`invalid_span_offset:${name}`);
+        const value = type === "string" ? span.text.trim() : parseNumber(span.text, "exact");
+        if (
+          value === undefined ||
+          value === "" ||
+          (type === "integer" && !Number.isInteger(value)) ||
+          (typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value))
+        )
+          throw new Error(`invalid_scalar_span:${name}`);
+        return [[name, value] as const];
+      }
       const candidates = ordered.flatMap(({ text }) => {
         const value = type === "string" ? text.trim() : parseNumber(text, questionStyle);
         return value === undefined || (type === "integer" && !Number.isInteger(value))

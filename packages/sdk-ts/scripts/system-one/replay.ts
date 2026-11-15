@@ -6,7 +6,7 @@
  *
  * REPLAY_ARMS, REPLAY_TASKS (comma lists), REPLAY_ROUNDS, REPLAY_CONCURRENCY.
  */
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -275,6 +275,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     "git",
     [
       "ls-files",
+      "-z",
       "--cached",
       "--others",
       "--exclude-standard",
@@ -285,9 +286,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ],
     { encoding: "utf8" },
   )
-    .trim()
-    .split("\n")
-    .filter(Boolean);
+    .split("\0")
+    .filter((path) => path && existsSync(path));
   const sources = Object.fromEntries(
     [...new Set(sourcePaths)].sort().map((path) => [path, readFileSync(path).toString("base64")]),
   );

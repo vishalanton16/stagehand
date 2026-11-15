@@ -1,6 +1,6 @@
 import { mapCopyExtract } from "./decisions/mapCopy.js";
-import { readDomCodeText } from "./decisions/domCodeText.js";
 import { scalarReader } from "./decisions/scalarReader.js";
+import { extractTableScalar, prepareTableScalar } from "./decisions/tableScalar.js";
 import { extractWithClairic } from "./decisions/clairic.js";
 import { extractWithDecider } from "./decisions/decider.js";
 import { TimeoutError } from "../errors.js";
@@ -64,9 +64,28 @@ type ExtractServiceOptions = {
   speculateListMapping?: boolean;
   /** Internal replay control. SDK calls use the default group selection. */
   groupExperiment?: Parameters<typeof mapCopyExtract>[1]["groupExperiment"];
-  /** Internal live benchmark control for rendered code-cell evidence. */
-  domCodeTextExperiment?: boolean;
+  /** Internal live benchmark control for table cell selection. */
+  tableCellExperiment?: boolean;
 };
+
+function isRequiredFlatScalarSchema(
+  schema: Parameters<typeof mapCopyExtract>[1]["schema"],
+): boolean {
+  if (schema.type !== "object") return false;
+  const fields = Object.entries(schema.properties ?? {});
+  const required = new Set(schema.required);
+  return (
+    fields.length > 0 &&
+    fields.length <= 8 &&
+    fields.every(
+      ([name, field]) =>
+        required.has(name) &&
+        !field.format &&
+        !field.anyOf &&
+        (field.type === "string" || field.type === "number" || field.type === "integer"),
+    )
+  );
+}
 
 export async function extract(options: ExtractServiceOptions): Promise<ExtractResult> {
   return runWithProgress(
@@ -88,7 +107,7 @@ async function extractWithProgress(
     decisions,
     speculateListMapping,
     groupExperiment,
-    domCodeTextExperiment,
+    tableCellExperiment,
   }: ExtractServiceOptions,
   progress: Progress,
 ): Promise<ExtractResult> {
@@ -198,33 +217,84 @@ async function extractWithProgress(
     );
 
     const schema = z.fromJSONSchema(params.schema as Parameters<typeof z.fromJSONSchema>[0]);
-    let extractionTree = combinedTree;
-
-    if (decisions?.extract === "map" && instruction && !screenshot) {
-      const evaluate = page.evaluate?.bind(page);
-      if (
-        domCodeTextExperiment &&
-        evaluate &&
-        !options?.locator &&
-        !options?.ignoreLocators?.length
-      ) {
-        const started = performance.now();
-        try {
-          const evidence = await progress.run("reading rendered code cells", () =>
-            readDomCodeText({ evaluate }, combinedTree, snapshot.combinedXpathMap),
+    let triedTableReader = false;
+    const jsonSchema = params.schema as Parameters<typeof mapCopyExtract>[1]["schema"];
+    const evaluateTable = tableCellExperiment ? page.evaluate?.bind(page) : undefined;
+    if (
+      evaluateTable &&
+      decisions?.provider === "perplexity" &&
+      decisions.extract === "map" &&
+      instruction &&
+      !screenshot &&
+      !options?.locator &&
+      !options?.ignoreLocators?.length &&
+      isRequiredFlatScalarSchema(jsonSchema)
+    ) {
+      const browserStarted = performance.now();
+      let candidates;
+      try {
+        if (/\] (?:table|grid)(?=:|\n|$)/i.test(combinedTree)) {
+          candidates = await progress.run("reading table cell candidates", () =>
+            prepareTableScalar({ evaluate: evaluateTable }, jsonSchema, instruction),
           );
-          extractionTree = evidence.tree;
-          logger.debug("Rendered code-cell evidence", {
-            category: "decisions",
-            inspected: evidence.inspected,
-            corrected: evidence.corrected,
-            durationMs: Math.round(performance.now() - started),
-          });
-        } catch {
+        }
+      } catch {
+        progress.throwIfStopped();
+      }
+      logger.debug("Table cell routing", {
+        category: "decisions",
+        eligible: !!candidates,
+        browserMs: Math.round(performance.now() - browserStarted),
+        candidateCounts: candidates?.map(({ cells }) => cells.length) ?? [],
+      });
+      if (candidates) {
+        triedTableReader = true;
+        const started = performance.now();
+        const trace: Parameters<typeof extractTableScalar>[4] = [];
+        try {
+          const data = await progress.run("selecting table cells", () =>
+            extractTableScalar(
+              {
+                ...decisions!,
+                recordDecisionUsage: (usage) => {
+                  nativeUsage.inputTokens += usage.inputTokens;
+                  nativeUsage.outputTokens += usage.outputTokens;
+                  decisions?.recordDecisionUsage?.(usage);
+                },
+              },
+              instruction,
+              candidates!,
+              progress,
+              trace,
+            ),
+          );
+          const valid = z.json().parse(schema.parse(data));
+          nativeUsage.inferenceTimeMs = Math.round(performance.now() - started);
+          logger.info("Table cell extraction accepted", { category: "decisions" });
+          return {
+            result: {
+              data: valid,
+              metadata: { usage: nativeUsage, cache: disabledCacheMetadata() },
+            },
+            cacheValue: valid,
+          };
+        } catch (error) {
           progress.throwIfStopped();
-          logger.debug("Rendered code-cell evidence unavailable", { category: "decisions" });
+          if (decisions.llmFallback === false) throw error;
+          nativeUsage.inferenceTimeMs = Math.round(performance.now() - started);
+          logger.info("Table cell extraction fell back to the LLM", {
+            category: "decisions",
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          logger.debug("Table cell extraction trace", {
+            category: "decisions",
+            trace: JSON.stringify(trace),
+          });
         }
       }
+    }
+    if (decisions?.extract === "map" && instruction && !screenshot && !triedTableReader) {
       const started = performance.now();
       let decisionRequests = 0;
       const trace: Parameters<typeof mapCopyExtract>[1]["trace"] = [];
@@ -242,8 +312,8 @@ async function extractWithProgress(
         const outcome = await progress.run("mapping extraction evidence", () =>
           mapCopyExtract(config, {
             instruction,
-            schema: params.schema as Parameters<typeof mapCopyExtract>[1]["schema"],
-            tree: extractionTree,
+            schema: jsonSchema,
+            tree: combinedTree,
             urlMap: (combinedUrlMap ?? {}) as Record<string, string>,
             reader: scalarReader(config, progress),
             readerChecks: true,
@@ -352,7 +422,7 @@ async function extractWithProgress(
     const extractionResponse: ExtractionResponse<z.ZodObject> =
       await inference.extract<z.ZodObject>({
         instruction,
-        domElements: extractionTree,
+        domElements: combinedTree,
         schema: transformedSchema as z.ZodObject,
         generate: (input) =>
           progress.run("waiting for extract inference", () =>

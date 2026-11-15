@@ -11,6 +11,11 @@ import { heldout5Tasks } from "./heldout5.js";
 import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
 import { liveCoverageTasks } from "./liveCoverageTasks.js";
 import { heldout7Tasks } from "./heldout7.js";
+import {
+  liveTableCellTasks,
+  locatePrimaryTasks,
+  locateRequiredTasks,
+} from "./locatePrimaryTasks.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 
 process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH ??= fileURLToPath(
@@ -89,10 +94,66 @@ const codeCellControls = [
   },
 ];
 
+const scalarControls = [
+  {
+    name: "table-cell-competing-tables",
+    html: "<h1>Rates</h1><h2>South division</h2><table><tr><th>Plan</th><th>Monthly fee</th></tr><tr><td>Standard</td><td>19</td></tr></table><h2>North division</h2><table><tr><th>Plan</th><th>Monthly fee</th></tr><tr><td>Standard</td><td>29</td></tr></table>",
+    instruction: "Extract the Monthly fee for the Standard plan in the North division's table.",
+    schema: z.object({ fee: z.number().describe("Monthly fee of Standard in North division") }),
+    expected: { fee: 29 },
+  },
+  {
+    name: "table-cell-empty-required",
+    html: "<h1>Directory</h1><table><tr><th>Team</th><th>Support code</th></tr><tr><td>Falcon</td><td>XY</td></tr><tr><td>Orion</td><td></td></tr></table>",
+    instruction:
+      "Extract the Support code for Orion. Return an empty string when Orion's cell is empty.",
+    schema: z.object({ code: z.string().describe("Support code in the Orion row") }),
+    expected: { code: "" },
+  },
+  {
+    name: "table-cell-compound-value",
+    html: "<h1>Catalog</h1><table><tr><th>Product</th><th>Support codes</th></tr><tr><td>Falcon</td><td>alpha (primary), beta (legacy)</td></tr><tr><td>Orion</td><td>gamma (primary), delta (legacy)</td></tr></table>",
+    instruction: "Extract the primary Support code for Falcon. Copy just the lowercase code.",
+    schema: z.object({
+      code: z
+        .string()
+        .regex(/^[a-z]+$/)
+        .describe("Primary Support codes entry for Falcon"),
+    }),
+    expected: { code: "alpha" },
+  },
+  {
+    name: "scalar-clipped-source",
+    html: `<h1>Release metadata</h1><p>${"Read this release information carefully. ".repeat(18)}Tracking identifier: ORCHID-733.</p>`,
+    instruction: "Copy the exact tracking identifier from the release metadata.",
+    schema: z.object({ identifier: z.string().regex(/^ORCHID-\d{3}$/) }),
+    expected: { identifier: "ORCHID-733" },
+  },
+  {
+    name: "scalar-zero-and-absence",
+    html: "<h1>Billing</h1><dl><dt>Monthly platform fee</dt><dd>$0</dd><dt>Premium support</dt><dd>$19</dd></dl>",
+    instruction:
+      "Extract the monthly platform fee and the annual platform fee only if explicitly printed. Omit a missing fee. Do not calculate it.",
+    schema: z.object({ monthly: z.number(), annual: z.number().optional() }),
+    expected: { monthly: 0 },
+  },
+  {
+    name: "scalar-normalized-date",
+    html: "<h1>Release notice</h1><p>Released on January 24, 2024.</p><p>Support ends January 24, 2026.</p>",
+    instruction: "Return the release date in YYYY-MM-DD format.",
+    schema: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    expected: { date: "2024-01-24" },
+  },
+];
+
 const selectedTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
   const task = [
     ...cases,
     ...codeCellControls,
+    ...scalarControls,
+    ...locatePrimaryTasks,
+    ...locateRequiredTasks,
+    ...liveTableCellTasks,
     ...heldout5Tasks,
     ...heldout6Tasks,
     ...heldout7Tasks,
@@ -104,7 +165,7 @@ const selectedTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
 });
 
 const server = createServer((request, response) => {
-  const task = [...cases, ...codeCellControls].find(
+  const task = [...cases, ...codeCellControls, ...scalarControls].find(
     (candidate) => request.url === "/" + candidate.name,
   );
   if (!task) return void response.writeHead(404).end();

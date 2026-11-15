@@ -128,3 +128,54 @@ it("converts a single numeric source span without guessing among multiple amount
     "Find the source span for the Basic monthly price.",
   );
 });
+
+it.each([
+  { span: { start: 7, end: 9, text: "$0" }, error: undefined },
+  { span: { start: 8, end: 10, text: "$0" }, error: "invalid_span_offset:price" },
+  { span: { start: 7, end: 16, text: "$0 and $1" }, error: "invalid_scalar_span:price" },
+  {
+    span: { start: 25, end: 41, text: "9007199254740993" },
+    error: "invalid_scalar_span:price",
+  },
+  { span: undefined, error: "missing_required_span:price" },
+])("checks bounded scalar provenance and normalization ($error)", async ({ span, error }) => {
+  const state = "🙂 Fee: $0 and $1. Large: 9007199254740993";
+  const recordUsage = vi.fn();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        answers: {
+          price: { type: "locate", spans: span ? [{ ...span, score: 0.99 }] : [] },
+          note: { type: "locate", spans: [] },
+        },
+        usage: { input_tokens: 70, output_tokens: 2 },
+      }),
+    ),
+  );
+  const params = StagehandExtractParamsSchema.parse({
+    pageId: "page",
+    instruction: "Extract the initial fee and an optional note",
+    schema: z.toJSONSchema(z.object({ price: z.number(), note: z.string().optional() })),
+  });
+  const extraction = runWithProgress({ name: "extract", timeout: 0 }, (progress) =>
+    extractWithDecider({
+      params,
+      model: { modelName: "pplx-decider-v1.3", apiKey: "test-key" },
+      progress,
+      recordUsage,
+      systemPrompt: "",
+      boundedScalar: true,
+      page: {
+        captureSnapshot: async () => ({
+          combinedTree: state,
+          combinedXpathMap: {},
+          combinedUrlMap: {},
+        }),
+      },
+    }),
+  );
+  if (error) await expect(extraction).rejects.toThrow(error);
+  else expect((await extraction).data).toEqual({ price: 0 });
+  expect(recordUsage).toHaveBeenCalledOnce();
+});

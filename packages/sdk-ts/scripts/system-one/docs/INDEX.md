@@ -30,7 +30,7 @@ Also read:
 | 6. Choose cross-check strictness      | Partial | Retained normalized exact comparison for scalars and strict validation of required list fields. Locate returned day fragments for Eiffel Tower dates. A controlled exact-versus-containment comparison remains open. |
 | 7. Run fresh heldout 5                | Done    | Six new sites, two rounds each. Decider and Flash each scored 10/12. Both misses per model came from the same ambiguous temperature page.                                                                            |
 | 8. Measure real pages through the SDK | Done    | Three sites, two rounds each. Decider passed 6/6 with zero fallbacks, and Luna passed 4/6. Decider had higher p50 and p95 latency.                                                                                   |
-| 9. Prepare a reviewable stack         | Pending | The initial implementation is in one local commit, `a9e5b9484`. The follow-up changes are unstaged. The suggested PR split is in [NEXT_STEPS.md](./NEXT_STEPS.md#9-split-into-a-reviewable-stack).                   |
+| 9. Prepare a reviewable stack         | Pending | The local branch contains the extraction stack. The suggested PR split is in [NEXT_STEPS.md](./NEXT_STEPS.md#9-split-into-a-reviewable-stack).                   |
 
 ## Measurements
 
@@ -173,4 +173,20 @@ Keep the current Decider and Luna fallback pattern with the nested-heading fix. 
 
 The [identifier-span option](./DECISION_PRIMITIVES.md#exact-copying) fixed the SQLite names on frozen replay and live pages. The MDN control still returned parentheses. For GitHub, a one-cell replay overlay using rendered DOM text moved both arms from 0/2 to 2/2. The Decider cascade still fell back on group disagreement. General DOM text retrieval remains an experiment.
 
-The [bounded DOM reader](./DECISION_PRIMITIVES.md#bounded-dom-reader) recovered the GitHub qualifier through Luna in all three live runs, up from 0/3. The other three cases passed all rounds in both arms. The reader stays benchmark-only. Next is a live comparison of scalar copy, Locate, and Clairic on the same bounded evidence.
+The [bounded DOM reader](./DECISION_PRIMITIVES.md#bounded-dom-reader) recovered the GitHub qualifier through Luna in all three live runs, up from 0/3. The other three cases passed all rounds in both arms. The reader is archived.
+
+### Scalar readers on frozen pages
+
+[Decider Locate v1.3](./DECISION_PRIMITIVES.md#frozen-page-comparison) passed 18/18 runs. The current SDK check-only arm accepted 10/18 and abstained on eight disagreements. Flash Locate passed 14/18, Clairic text 10/18, and Clairic typed 8/18.
+
+In the [fresh live SDK comparison](./DECISION_PRIMITIVES.md#locate-primary-through-the-live-sdk), Locate-first scored 16/18 versus 18/18 for the current SDK and 17/18 for Luna. It used two fallbacks versus six, but wrongly populated an absent optional field twice.
+
+[Required-only routing](./DECISION_PRIMITIVES.md#required-only-routing-on-a-fresh-set) scored 10/14 versus 12/14 for the current SDK. Both additional failures used the wrong column on NIST and were accepted directly. The candidate is archived.
+
+[Cell selection before Locate](./DECISION_PRIMITIVES.md#select-a-table-cell-before-reading-its-value) passed 14/14 follow-up runs across six table cases and the NIST regression. It selects a labeled cell, copies its value, and uses Locate inside that cell when needed.
+
+In the [live SDK comparison](./DECISION_PRIMITIVES.md#live-sdk-routing-for-table-cells), the table path passed 12/12 routed runs versus 10/12 for the current SDK and cut that subset's cost by 48%. Full-set cost was flat. The mixed-page Luna fallback dominated both arms. Next, test more table layouts and mixed-field routing.
+
+### Current focus
+
+The current SDK mapper and the table-cell benchmark path remain active. The rejected Locate-first routes, list retry and source-coverage arms, DOM code overlay, and independent table agreement code were retired. The [cleanup record](./DECISION_PRIMITIVES.md#active-extraction-paths) links the archived source and results. The next experiment measures mixed schemas and harder table layouts. [Next steps](./NEXT_STEPS.md#current-experiment-order)

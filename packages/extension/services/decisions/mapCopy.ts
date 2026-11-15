@@ -56,10 +56,14 @@ export type TraceEntry = {
  * A span or field extractor (Perplexity Decider locate, Cloudflare Clairic)
  * that reads single values from a small fact sheet the data view prepares.
  */
-export type ScalarReader = (input: {
+export type ScalarReaderInput = {
   sheet: string;
   fields: { name: string; type: "string" | "number"; instructions: string }[];
-}) => Promise<Record<string, string | number | null | undefined>>;
+};
+
+export type ScalarReader = (
+  input: ScalarReaderInput,
+) => Promise<Record<string, string | number | null | undefined>>;
 
 const NONE = "none";
 
@@ -442,12 +446,7 @@ export function listGroupRanks(input: {
   }));
 }
 
-export type ListGroupExperiment =
-  | "schema"
-  | "retry-shortlist"
-  | "source-coverage"
-  | { retryGroupProbe: { omit: string[]; sourceCoverage?: boolean } }
-  | { oracleGroup: string };
+export type ListGroupExperiment = "schema" | { oracleGroup: string };
 
 function describeGroup(view: DataView, group: Group): string {
   const where = group.sections.length
@@ -658,63 +657,22 @@ export function listGroupProbe(
     omit = [],
     reverse = false,
     richer = false,
-    shortlist = "baseline",
   }: {
     omit?: string[];
     reverse?: boolean;
     richer?: boolean;
-    shortlist?: "baseline" | "supplementary";
   } = {},
 ) {
   const view = buildDataView(input.tree, input.urlMap);
   return plan(input.schema).lists.map((list) => {
-    const baseline = rankGroups(view, list, input.instruction);
-    const groups = (
-      shortlist === "supplementary"
-        ? supplementaryGroups(view, list, input.instruction, baseline)
-        : baseline
-    ).filter((group) => !omit.includes(group.id));
+    const groups = rankGroups(view, list, input.instruction).filter(
+      (group) => !omit.includes(group.id),
+    );
     if (reverse) groups.reverse();
     return groups.length
       ? listGroupQuestions(view, list, input.instruction, groups, richer)
       : undefined;
   });
-}
-
-function supplementaryGroups(
-  view: DataView,
-  list: ListPlan,
-  instruction: string,
-  baseline: Group[],
-) {
-  return schemaRankGroups(view, list, instruction)
-    .slice(0, 4)
-    .filter((candidate) => !baseline.includes(candidate));
-}
-
-function competingListSource(
-  view: DataView,
-  list: ListPlan,
-  instruction: string,
-  selected: Group,
-): Group | undefined {
-  const task = ` ${[...tokens(instruction)].join(" ")} `;
-  const matchesScope = (group: Group) =>
-    [group.context[0] ?? "", ...group.sections].some((label) => {
-      const terms = [...tokens(label)];
-      return terms.length >= 2 && task.includes(` ${terms.join(" ")} `);
-    });
-  if (matchesScope(selected)) return undefined;
-  const selectedRows = new Set(selected.records.map((record) => record.index));
-  const needsLinks = list.fields.some((field) => field.type === "url" && field.required);
-  return view.groups.find(
-    (group) =>
-      group.role === selected.role &&
-      group.records.length > selected.records.length &&
-      !group.records.some((record) => selectedRows.has(record.index)) &&
-      (!needsLinks || group.slots.some((slot) => slot.link && slot.coverage >= 0.5)) &&
-      matchesScope(group),
-  );
 }
 
 async function readList(
@@ -727,10 +685,6 @@ async function readList(
   groupExperiment: ListGroupExperiment | undefined,
   stopOnDisagreement: boolean,
 ): Promise<unknown[] | undefined> {
-  const retryProbe =
-    typeof groupExperiment === "object" && "retryGroupProbe" in groupExperiment
-      ? groupExperiment.retryGroupProbe
-      : undefined;
   const oracle =
     typeof groupExperiment === "object" && "oracleGroup" in groupExperiment
       ? groupExperiment.oracleGroup
@@ -739,10 +693,7 @@ async function readList(
     groupExperiment === "schema"
       ? schemaRankGroups(view, list, instruction).slice(0, 8)
       : rankGroups(view, list, instruction);
-  const firstGroups = retryProbe
-    ? groups.filter((candidate) => !retryProbe.omit.includes(candidate.id))
-    : groups;
-  if (firstGroups.length === 0 && !oracle) return undefined;
+  if (!groups.length && !oracle) return undefined;
   const candidate = groups[0]!;
   const speculative =
     speculateListMapping && candidate && typeof groupExperiment !== "object"
@@ -756,45 +707,10 @@ async function readList(
       : undefined;
   // The group answer can reject this candidate. Observe its failure immediately.
   void speculative?.response.catch(() => {});
-  let group = oracle
+  const group = oracle
     ? view.groups.find((candidate) => candidate.id === oracle)
-    : await chooseListGroup(
-        config,
-        view,
-        list,
-        instruction,
-        firstGroups,
-        trace,
-        stopOnDisagreement,
-      );
-  if (
-    !group &&
-    (groupExperiment === "retry-shortlist" || groupExperiment === "source-coverage" || retryProbe)
-  ) {
-    const supplementary = supplementaryGroups(view, list, instruction, groups).filter(
-      (candidate) => !retryProbe?.omit.includes(candidate.id),
-    );
-    if (supplementary.length) {
-      group = await chooseListGroup(
-        config,
-        view,
-        list,
-        instruction,
-        supplementary,
-        trace,
-        stopOnDisagreement,
-      );
-    }
-  }
+    : await chooseListGroup(config, view, list, instruction, groups, trace, stopOnDisagreement);
   if (!group) return undefined;
-  if (groupExperiment === "source-coverage" || retryProbe?.sourceCoverage) {
-    const competing = competingListSource(view, list, instruction, group);
-    if (competing) {
-      const reason = `competing-source:${list.name}:${group.id}:${competing.id}`;
-      problem(trace, reason);
-      if (stopOnDisagreement) throw new Error(reason);
-    }
-  }
   trace.push({
     step: `${list.name}:page-items`,
     choice: String(group.records.length),
@@ -1255,7 +1171,7 @@ async function readScalars(
     Object.keys(questions).length
       ? ask(config, { task: instruction }, questions).then((result) => result.answers)
       : {},
-    reader ? readFromSheet(reader, view, fields, instruction, options, readerTrace) : {},
+    reader ? readFromSheet(reader, fields, instruction, options, readerTrace) : {},
   ]);
 
   const data: Record<string, unknown> = {};
@@ -1351,6 +1267,38 @@ function sameValue(a: unknown, b: unknown): boolean {
   return x === y;
 }
 
+function scalarReaderEvidence(fields: Field[], instruction: string, options: Map<string, Fact[]>) {
+  const facts = [...new Set(fields.flatMap((field) => options.get(field.name) ?? []))].sort(
+    (a, b) => a.node.index - b.node.index,
+  );
+  const scalarFields = fields.filter((field) => field.type !== "url");
+  const input: ScalarReaderInput = {
+    sheet: facts
+      .map((fact) => `${fact.label ? `${clip(fact.label, 90)}: ` : ""}${clip(fact.value, 300)}`)
+      .join("\n"),
+    fields: scalarFields.map((field) => ({
+      name: field.name,
+      type: field.type === "string" ? "string" : "number",
+      instructions: `${instruction}\nFind the exact value for ${fieldText(field)}.`,
+    })),
+  };
+  return { facts, scalarFields, input };
+}
+
+export function buildScalarReaderInput(
+  schema: JsonSchema,
+  tree: string,
+  urlMap: Record<string, string>,
+  instruction: string,
+): ScalarReaderInput {
+  const view = buildDataView(tree, urlMap);
+  const { scalars } = plan(schema);
+  const options = new Map(
+    scalars.map((field) => [field.name, rankFacts(view, field, instruction)]),
+  );
+  return scalarReaderEvidence(scalars, instruction, options).input;
+}
+
 /**
  * The candidate facts of every field, one "label: value" line each in page
  * order, read by a span/field extractor. A value counts only if it occurs in
@@ -1358,29 +1306,14 @@ function sameValue(a: unknown, b: unknown): boolean {
  */
 async function readFromSheet(
   reader: ScalarReader,
-  view: DataView,
   fields: Field[],
   instruction: string,
   options: Map<string, Fact[]>,
   trace: TraceEntry[],
 ): Promise<Record<string, unknown>> {
-  const facts = [...new Set(fields.flatMap((field) => options.get(field.name) ?? []))].sort(
-    (a, b) => a.node.index - b.node.index,
-  );
-  if (!facts.length) return {};
-  const sheet = facts
-    .map((fact) => `${fact.label ? `${clip(fact.label, 90)}: ` : ""}${clip(fact.value, 300)}`)
-    .join("\n");
-  const scalarFields = fields.filter((field) => field.type !== "url");
-  if (!scalarFields.length) return {};
-  const answers = await reader({
-    sheet,
-    fields: scalarFields.map((field) => ({
-      name: field.name,
-      type: field.type === "string" ? "string" : "number",
-      instructions: `${instruction}\nFind the exact value for ${fieldText(field)}.`,
-    })),
-  });
+  const { facts, scalarFields, input } = scalarReaderEvidence(fields, instruction, options);
+  if (!facts.length || !scalarFields.length) return {};
+  const answers = await reader(input);
   const normal = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim();
   const data: Record<string, unknown> = {};
   for (const field of scalarFields) {

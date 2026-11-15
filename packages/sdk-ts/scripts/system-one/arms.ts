@@ -373,12 +373,6 @@ export const extraArms: Record<string, Arm> = {
   "runtime-decider-speculative": runtimeMap("decider", { speculateListMapping: true }),
   "runtime-flash": runtimeMap("flash"),
   "runtime-decider-v13": runtimeMap("decider", { experiment: "baseline" }),
-  "runtime-decider-v13-retry-shortlist": runtimeMap("decider", {
-    experiment: "retry-shortlist",
-  }),
-  "runtime-decider-v13-source-coverage": runtimeMap("decider", {
-    experiment: "source-coverage",
-  }),
   "runtime-decider-v13-schema": runtimeMap("decider", {
     experiment: "schema",
     speculateListMapping: true,
