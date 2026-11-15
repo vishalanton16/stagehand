@@ -149,7 +149,7 @@ try {
           try {
             if (!state.trim()) throw new Error("No evidence for variant");
             if (provider === "luna") {
-              const response = await inference.extract({
+              const { data } = await inference.extract({
                 instruction: task.instruction,
                 domElements: state,
                 schema: task.schema,
@@ -158,7 +158,7 @@ try {
                     llmUsage.push({ ...tokens, cachedInputTokens: tokens.cachedInputTokens ?? 0 }),
                   ),
               });
-              result = task.schema.parse(response);
+              result = data;
             } else {
               const response = await runWithProgress(
                 { name: "extract", timeout: 30_000 },

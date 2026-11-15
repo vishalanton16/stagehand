@@ -189,4 +189,20 @@ In the [live SDK comparison](./DECISION_PRIMITIVES.md#live-sdk-routing-for-table
 
 ### Current focus
 
-The current SDK mapper and the table-cell benchmark path remain active. The rejected Locate-first routes, list retry and source-coverage arms, DOM code overlay, and independent table agreement code were retired. The [cleanup record](./DECISION_PRIMITIVES.md#active-extraction-paths) links the archived source and results. The next experiment measures mixed schemas and harder table layouts. [Next steps](./NEXT_STEPS.md#current-experiment-order)
+The SDK uses the current Decider mapper with a single Luna fallback call. Ordinary Luna extraction also runs once. The standalone Decider completion judge remains in the `judge` and `pick` modes. Table-cell selection and whole-page AX compaction are available for benchmarks. The [cleanup record](./DECISION_PRIMITIVES.md#active-extraction-paths) and [single-call archive](./DECISION_PRIMITIVES.md#remove-the-completion-call-from-extraction) link retired source and results. A standalone signature parser remains in the replay tools.
+
+[Mixed-field routing](./DECISION_PRIMITIVES.md#mixed-table-and-prose-routing-through-the-sdk) passed 14/14 live runs. It avoided both full-page Luna calls on the known Python datetime task. Cost was comparable after excluding that task.
+
+[Bounded Luna fallback](./DECISION_PRIMITIVES.md#bounded-evidence-for-luna-fallback) passed 14/14 and cut the cost from $1.712 to $0.339 per 1,000. Full-page retries increased p95 from 8.29 to 11.21 s.
+
+The [fresh size-gate test](./DECISION_PRIMITIVES.md#large-snapshot-gate-for-bounded-fallback) passed 14/14. Eight of ten bounded calls retried. Uncached cost fell 11%, and p95 rose from 9.56 to 15.40 s.
+
+[Named defaults in signatures](./DECISION_PRIMITIVES.md#named-numeric-defaults-in-function-signatures) passed 18/18 in all three live arms. On the four eligible runs, direct copy took 1.04 s median versus 3.52 s for bounded Luna and 8.61 s for full-page fallback.
+
+[Whole-page AX compaction](./DECISION_PRIMITIVES.md#whole-page-accessibility-compaction) cut Luna input by 44% and uncached cascade cost by 39% on 16 fresh pages. The cascade passed 31/32 versus 30/32, with the same 18 fallbacks and zero wrong direct accepts in both arms. All-run p95 went from 9.19 to 8.07 s, while fallback p95 went from 13.76 to 23.37 s. The slowest compact run spent most of its output tokens on reasoning in the existing completion call. Keep compaction experimental and isolate the latency of that call. [Next steps](./NEXT_STEPS.md#current-experiment-order)
+
+[Skipping Luna's completion call](./DECISION_PRIMITIVES.md#the-luna-completion-round-trip) cut cascade p95 from 9.84 to 3.61 s on the same 16 pages over three rounds, at 45/48 in both cascade arms. Single-call Luna passed 44/48 at 2.81 s p95 and remains the latency baseline. The cascade cost 60% less at uncached rates. Provider cache reads were common, so confirm timing on fresh live pages. The standalone Decider verdict passed 32/32 at 0.44 s median, versus Luna's 28/32 at 3.52 s. [Next steps](./NEXT_STEPS.md#current-experiment-order)
+
+[Through the public SDK](./DECISION_PRIMITIVES.md#remove-the-completion-call-from-extraction), old and single-call Luna both passed 10/12. P95 went from 5.13 to 2.37 s. Decider with raw Luna fallback passed 10/12 at 3.14 s p95 and used Luna on six of twelve runs. The wider fresh comparison remains open.
+
+In the consolidated replay, compact Luna passed 46/48 at 3.24 s p95 for $0.863 per 1,000 uncached. Decider with compact fallback passed 45/48 at 4.97 s for $0.618. With reported cache reads, compact Luna cost $0.114 per 1,000 versus $0.142 for the cascade. Both compact paths stay in the benchmark for the fresh live comparison.

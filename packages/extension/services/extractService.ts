@@ -27,6 +27,7 @@ import { type Progress, runWithProgress } from "../understudy/progress.js";
 import type { EncodedId, ZodPathSegments } from "../types/private/internal.js";
 import { injectUrls, transformSchema } from "../utils.js";
 import * as cacheService from "./cacheService.js";
+import { compactExtractionTree } from "./compactExtractionTree.js";
 import * as llmService from "./llmService.js";
 import { disabledCacheMetadata, zeroStagehandResultUsage } from "./resultUsage.js";
 
@@ -37,17 +38,6 @@ export function transformUrlStringsToNumericIds<Schema extends z.ZodType>(
   const [finalSchema, urlPaths] = transformSchema(schema, []);
   return [finalSchema, urlPaths];
 }
-
-interface ExtractionResponseBase {
-  metadata: { completed: boolean };
-  prompt_tokens: number;
-  completion_tokens: number;
-  reasoning_tokens: number;
-  cached_input_tokens: number;
-  inference_time_ms: number;
-}
-
-type ExtractionResponse<Schema extends z.ZodObject> = ExtractionResponseBase & z.infer<Schema>;
 
 type ExtractServiceOptions = {
   params: StagehandExtractParams;
@@ -66,6 +56,8 @@ type ExtractServiceOptions = {
   groupExperiment?: Parameters<typeof mapCopyExtract>[1]["groupExperiment"];
   /** Internal live benchmark control for table cell selection. */
   tableCellExperiment?: boolean;
+  /** Internal benchmark control for the text sent to the LLM. */
+  compactEvidenceExperiment?: boolean;
 };
 
 function isRequiredFlatScalarSchema(
@@ -108,6 +100,7 @@ async function extractWithProgress(
     speculateListMapping,
     groupExperiment,
     tableCellExperiment,
+    compactEvidenceExperiment,
   }: ExtractServiceOptions,
   progress: Progress,
 ): Promise<ExtractResult> {
@@ -409,6 +402,22 @@ async function extractWithProgress(
           [wrapKey]: schema,
         });
     const [transformedSchema, urlFieldPaths] = transformUrlStringsToNumericIds(objectSchema);
+    const domElements =
+      compactEvidenceExperiment &&
+      !screenshot &&
+      !/\[\d+-\d+\]|\b(?:element|node|dom)\s+ids?\b/i.test(`${instruction}\n${systemPrompt}`)
+        ? compactExtractionTree(
+            combinedTree,
+            new Set(urlFieldPaths.length ? Object.keys(combinedUrlMap ?? {}) : []),
+          )
+        : combinedTree;
+    if (compactEvidenceExperiment) {
+      logger.debug("Extraction evidence size", {
+        category: "decisions",
+        snapshotCharacters: combinedTree.length,
+        evidenceCharacters: domElements.length,
+      });
+    }
 
     const screenshotContent: LLMImageContent | undefined = screenshot
       ? {
@@ -419,66 +428,67 @@ async function extractWithProgress(
       : undefined;
 
     progress.throwIfStopped();
-    const extractionResponse: ExtractionResponse<z.ZodObject> =
-      await inference.extract<z.ZodObject>({
-        instruction,
-        domElements: combinedTree,
-        schema: transformedSchema as z.ZodObject,
-        generate: (input) =>
-          progress.run("waiting for extract inference", () =>
-            llmService.generate(model, input, clientLLMGenerate, gateway),
-          ),
-        userProvidedInstructions:
-          decisions?.extract === "map"
-            ? [
-                systemPrompt,
-                "For optional fields, omit the field when the supplied page does not contain the requested fact. Absence is not zero. Return zero only when the page explicitly reports zero for that fact. Do not infer values from outside knowledge.",
-              ]
-                .filter(Boolean)
-                .join("\n")
-            : systemPrompt,
-        screenshot: screenshotContent,
-        ...(decisions &&
-        decisions.extract !== "native" &&
-        decisions.extract !== "map" &&
-        instruction
-          ? {
-              judgeCompleted: async (extracted: unknown) => {
-                const trace: Record<string, unknown>[] = [];
-                const verdict = await extractionCompleted(
-                  {
-                    config: decisions,
-                    instruction,
-                    trace: trace as never,
-                    threshold: 0.5,
-                    logger,
-                    ensureTimeRemaining: () => progress.throwIfStopped(),
-                  },
-                  extracted,
-                );
-                logger.info("Decisions extract completion", {
-                  category: "decisions",
-                  instruction,
-                  score: verdict.score,
-                  trace: JSON.stringify(trace),
-                });
-                return verdict.completed;
-              },
-            }
-          : {}),
-      });
+    const { data, usage, durationMs } = await inference.extract({
+      instruction,
+      domElements,
+      schema: transformedSchema as z.ZodObject,
+      generate: (input) =>
+        progress.run("waiting for extract inference", () =>
+          llmService.generate(model, input, clientLLMGenerate, gateway),
+        ),
+      userProvidedInstructions:
+        decisions?.extract === "map"
+          ? [
+              systemPrompt,
+              "For optional fields, omit the field when the supplied page does not contain the requested fact. Absence is not zero. Return zero only when the page explicitly reports zero for that fact. Do not infer values from outside knowledge.",
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : systemPrompt,
+      screenshot: screenshotContent,
+    });
     progress.throwIfStopped();
 
+    let completed: boolean | undefined;
+    if (
+      decisions &&
+      (decisions.extract === "judge" || decisions.extract === "pick") &&
+      instruction
+    ) {
+      try {
+        const trace: Parameters<typeof extractionCompleted>[0]["trace"] = [];
+        const verdict = await extractionCompleted(
+          {
+            config: decisions,
+            instruction,
+            trace,
+            threshold: 0.5,
+            logger,
+            ensureTimeRemaining: () => progress.throwIfStopped(),
+          },
+          data,
+        );
+        completed = verdict.completed;
+        logger.info("Decisions extract completion", {
+          category: "decisions",
+          instruction,
+          score: verdict.score,
+          trace: JSON.stringify(trace),
+        });
+      } catch {
+        // The verdict only affects logging. Cancellation still stops the extraction.
+        progress.throwIfStopped();
+      }
+      progress.throwIfStopped();
+    }
+
     const {
-      metadata: { completed },
-      prompt_tokens,
-      completion_tokens,
-      reasoning_tokens,
-      cached_input_tokens,
-      inference_time_ms,
-      ...rest
-    } = extractionResponse;
-    let output = rest as z.infer<z.ZodObject>;
+      inputTokens = 0,
+      outputTokens = 0,
+      reasoningTokens = 0,
+      cachedInputTokens = 0,
+    } = usage ?? {};
+    let output: unknown = data;
 
     const idToUrl: Record<EncodedId, string> = (combinedUrlMap ?? {}) as Record<EncodedId, string>;
     for (const { segments } of urlFieldPaths) {
@@ -493,14 +503,16 @@ async function extractWithProgress(
     }
 
     logger.info(
-      completed
-        ? "Extraction completed successfully"
-        : "Extraction incomplete after processing all data",
+      completed === undefined
+        ? "Extraction result returned"
+        : completed
+          ? "Extraction completed successfully"
+          : "Extraction incomplete after processing all data",
       {
         category: "extraction",
-        promptTokens: prompt_tokens,
-        completionTokens: completion_tokens,
-        inferenceTimeMs: inference_time_ms,
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        inferenceTimeMs: durationMs,
       },
     );
 
@@ -509,20 +521,20 @@ async function extractWithProgress(
         data: z.json().parse(output),
         metadata: {
           usage: {
-            inputTokens: prompt_tokens + nativeUsage.inputTokens,
-            outputTokens: completion_tokens + nativeUsage.outputTokens,
-            reasoningTokens: reasoning_tokens,
-            cachedInputTokens: cached_input_tokens,
-            inferenceTimeMs: inference_time_ms + nativeUsage.inferenceTimeMs,
+            inputTokens: inputTokens + nativeUsage.inputTokens,
+            outputTokens: outputTokens + nativeUsage.outputTokens,
+            reasoningTokens,
+            cachedInputTokens,
+            inferenceTimeMs: durationMs + nativeUsage.inferenceTimeMs,
           },
           cache: disabledCacheMetadata(),
         },
       },
       cacheValue: output,
       llmUsage: {
-        inputTokens: prompt_tokens,
-        outputTokens: completion_tokens,
-        llmDurationMs: inference_time_ms,
+        inputTokens,
+        outputTokens,
+        llmDurationMs: durationMs,
       },
     };
   }

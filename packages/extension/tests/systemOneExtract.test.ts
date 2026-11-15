@@ -9,14 +9,11 @@ import { extract } from "../services/extractService.js";
 afterEach(() => vi.restoreAllMocks());
 
 function setup() {
-  const generate = vi.fn(async (params): Promise<LLMGenerateResult> => ({
+  const generate = vi.fn(async (_params): Promise<LLMGenerateResult> => ({
     role: "assistant",
     content: { type: "text", text: "result" },
     outputFormat: "json_schema",
-    structuredContent:
-      params.responseFormat?.name === "Metadata"
-        ? { completed: true, progress: "done" }
-        : { name: "Example", stars: 0 },
+    structuredContent: { name: "Example", stars: 0 },
     usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
   }));
   return {
@@ -86,8 +83,8 @@ describe("System One extract service", () => {
     const options = setup();
     const result = await extract(options);
     expect(result.data).toEqual({ name: "Example", stars: 0 });
-    expect(result.metadata.usage).toMatchObject({ inputTokens: 50, outputTokens: 6 });
-    expect(options.clientLLMGenerate).toHaveBeenCalledTimes(2);
+    expect(result.metadata.usage).toMatchObject({ inputTokens: 40, outputTokens: 4 });
+    expect(options.clientLLMGenerate).toHaveBeenCalledTimes(1);
     expect(options.clientLLMGenerate.mock.calls[0][0].systemPrompt).toContain(
       "Absence is not zero",
     );
@@ -101,7 +98,7 @@ describe("System One extract service", () => {
     });
     const options = setup();
     expect((await extract(options)).data).toEqual({ name: "Example", stars: 0 });
-    expect(options.clientLLMGenerate).toHaveBeenCalledTimes(2);
+    expect(options.clientLLMGenerate).toHaveBeenCalledTimes(1);
   });
 
   it("falls back directly to the LLM for a missing selected table cell and keeps its usage", async () => {
@@ -169,14 +166,11 @@ describe("System One extract service", () => {
       tableCellExperiment: true,
       clientLLMGenerate: async (params) => {
         const result = await options.clientLLMGenerate(params);
-        const format = params.responseFormat;
-        return format?.type === "json_schema" && format.name === "Metadata"
-          ? result
-          : { ...result, structuredContent: { name: "Example" } };
+        return { ...result, structuredContent: { name: "Example" } };
       },
     });
     expect(result.data).toEqual({ name: "Example" });
-    expect(result.metadata.usage).toMatchObject({ inputTokens: 80, outputTokens: 6 });
+    expect(result.metadata.usage).toMatchObject({ inputTokens: 70, outputTokens: 4 });
     expect(evaluate).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(mapper).not.toHaveBeenCalled();

@@ -4,9 +4,8 @@ The SDK keeps Decider's current mapper and one Luna fallback. The table-cell rou
 
 ## Current experiment order
 
-1. **Test mixed table and prose extraction.** Compare the current mapper, the all-or-nothing table route, and routing fields separately. Start by sending fields with a supported table cell to the table reader and the remaining fields to the mapper. Validate the complete schema before accepting. Measure whether one Luna fallback for unresolved fields reduces the cost of large mixed pages.
-2. **Stress the table route on a separate fresh set.** Include grouped headers, repeated tables with conflicting values, absent cells, and schemas with weak field descriptions. Freeze graders before running. Count wrong direct accepts and missing valid fields separately from fallbacks.
-3. **Decide whether to enable the route in the experimental SDK.** Require zero additional wrong direct accepts and an end-to-end cost or latency improvement. Report billed tokens and p95 for both the routed subset and the entire workload.
+1. **Reassess Decider against single-call Luna on fresh live pages.** Compare raw Luna, compact Luna, and Decider with compact Luna fallback. Keep URL lists, partial results, and absent optional fields in the workload. Report cache reads, accuracy, cost, and p95 for the same tasks and rounds, including separate direct-accept and fallback timings.
+2. **Resume table-cell validation independently.** Include grouped headers, competing tables, weak field descriptions, and absent required cells. Freeze graders before running. Count wrong direct accepts and report the routed subset alongside the full workload.
 
 Completed experiments and archived implementations are linked from [the cleanup record](./DECISION_PRIMITIVES.md#active-extraction-paths). Scalar agreement strictness and the list tail-latency regression remain open in the [implementation status](./INDEX.md#plan-status).
 

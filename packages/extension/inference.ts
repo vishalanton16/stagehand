@@ -11,25 +11,12 @@ import {
   buildActSystemPrompt,
   buildExtractSystemPrompt,
   buildExtractUserPrompt,
-  buildMetadataPrompt,
-  buildMetadataSystemPrompt,
   buildObserveSystemPrompt,
   buildObserveUserMessage,
 } from "./prompt.js";
 import { SupportedUnderstudyAction } from "./types/private/handlers.js";
 
 type GenerateLlm = (params: LLMGenerateParams) => Promise<LLMGenerateResult>;
-
-const ExtractMetadataSchema = z.object({
-  progress: z
-    .string()
-    .describe("progress of what has been extracted so far, as concise as possible"),
-  completed: z
-    .boolean()
-    .describe(
-      "true if the goal is now accomplished. Use this conservatively, only when sure that the goal has been completed.",
-    ),
-});
 
 const ObservationSchema = z
   .object({
@@ -131,55 +118,16 @@ export async function extract<T extends z.ZodObject>(params: {
   generate: GenerateLlm;
   userProvidedInstructions?: string;
   screenshot?: LLMImageContent;
-  /** Replaces the metadata LLM call; a throw falls back to it. */
-  judgeCompleted?: (extracted: unknown) => Promise<boolean>;
-}): Promise<
-  z.infer<T> & {
-    metadata: z.infer<typeof ExtractMetadataSchema>;
-    prompt_tokens: number;
-    completion_tokens: number;
-    reasoning_tokens: number;
-    cached_input_tokens: number;
-    inference_time_ms: number;
-  }
-> {
+}) {
   const { instruction, domElements, schema, generate, userProvidedInstructions, screenshot } =
     params;
-  const extraction = await generateStructured(
+  return generateStructured(
     generate,
     "Extraction",
     schema,
     promptText(buildExtractSystemPrompt(false, userProvidedInstructions, Boolean(screenshot))),
     buildExtractUserPrompt(instruction, domElements, false, screenshot),
   );
-  // Deferred so a synchronous throw in the judge falls back like a rejection.
-  const judged = params.judgeCompleted
-    ? await Promise.resolve()
-        .then(() => params.judgeCompleted!(extraction.data))
-        .catch(() => undefined)
-    : undefined;
-  const metadata =
-    judged === undefined
-      ? await generateStructured(
-          generate,
-          "Metadata",
-          ExtractMetadataSchema,
-          promptText(buildMetadataSystemPrompt()),
-          promptText(buildMetadataPrompt(instruction, extraction.data)),
-        )
-      : { data: { progress: "", completed: judged }, usage: undefined, durationMs: 0 };
-
-  return {
-    ...extraction.data,
-    metadata: metadata.data,
-    prompt_tokens: (extraction.usage?.inputTokens ?? 0) + (metadata.usage?.inputTokens ?? 0),
-    completion_tokens: (extraction.usage?.outputTokens ?? 0) + (metadata.usage?.outputTokens ?? 0),
-    reasoning_tokens:
-      (extraction.usage?.reasoningTokens ?? 0) + (metadata.usage?.reasoningTokens ?? 0),
-    cached_input_tokens:
-      (extraction.usage?.cachedInputTokens ?? 0) + (metadata.usage?.cachedInputTokens ?? 0),
-    inference_time_ms: extraction.durationMs + metadata.durationMs,
-  };
 }
 
 export async function observe(params: {

@@ -117,7 +117,7 @@ export async function lunaExtract(
   guardMissing = true,
 ): Promise<unknown> {
   const [schema, urlPaths] = transformSchema(task.schema, []);
-  const response = await inference.extract({
+  const { data } = await inference.extract({
     instruction: task.instruction,
     ...(guardMissing
       ? {
@@ -135,15 +135,6 @@ export async function lunaExtract(
         usage.cachedInputTokens += tokens.cachedInputTokens ?? 0;
       }),
   });
-  const {
-    metadata: _m,
-    prompt_tokens: _p,
-    completion_tokens: _c,
-    reasoning_tokens: _r,
-    cached_input_tokens: _ci,
-    inference_time_ms: _t,
-    ...data
-  } = response as Record<string, unknown>;
   for (const { segments } of urlPaths) injectUrls(data, segments, urlMap);
   return data;
 }

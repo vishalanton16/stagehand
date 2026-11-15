@@ -4,9 +4,9 @@ Phased path from the current experiment to something Stagehand can ship. Each ph
 
 ## Current decisions
 
-The experimental SDK uses the dual list gate and one Luna fallback. The table-cell route is the current benchmark candidate. The next comparison targets mixed tables and prose, with a separate fresh set for routing accuracy. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
+The experimental SDK uses the dual list gate and a single Luna fallback call. Ordinary extraction also uses a single call. Table-cell selection and whole-page AX compaction remain benchmark candidates. Mixed-field splitting, bounded Luna, snapshot-size gating, and signature routing are archived. The standalone signature parser remains available for replay.
 
-The first missing-evidence replay found wrong group picks before and after retry. The source-coverage follow-up caught the incomplete Python documentation list and preserved the positive retry controls. The live comparison measured five successful retries on known controls and a shared list-coverage error on a fresh page. The heading fix passed the row-coverage regression and two fresh live tasks. The five-page promotion check saw no retries. The SDK stays on current Decider plus Luna fallback. The identifier span fixed SQLite without changing the request count. The archived DOM reader fixed the GitHub qualifier after fallback. Locate-first reduced scalar fallbacks, but both broad and required-only routing added wrong direct accepts. Labeled cell selection passed all 12 routed live runs. The mixed-page Luna fallback dominated overall cost. Test broader table coverage and mixed-field routing next.
+Compaction cut the uncached cost of the Decider cascade by 39%. Removing the log-only completion call then brought cascade p95 down to 3.61 s. Single-call Luna was faster at 2.81 s p95. Confirm both paths on fresh live pages. Treat Decider as a cost-saving candidate until it meets the single-call latency baseline. See the [ordered experiments](./NEXT_STEPS.md#current-experiment-order).
 
 ## Phase 0 — Stabilize the production path (now)
 
