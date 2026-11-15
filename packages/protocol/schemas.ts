@@ -1515,7 +1515,7 @@ export const ExperimentalDecisionsConfigSchema = z
   .strictObject({
     provider: z.enum(["typesafe", "cloudflare", "perplexity"]).optional().meta({
       description:
-        "Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider",
+        "Decision-model provider: Perplexity Decider (default), TypeSafe Jev, or Cloudflare Clef",
     }),
     apiKey: z.string().min(1),
     model: z.string().min(1).optional(),
@@ -1529,23 +1529,10 @@ export const ExperimentalDecisionsConfigSchema = z
       .regex(/^[A-Za-z0-9_-]{1,64}$/)
       .optional()
       .meta({ description: 'Cloudflare account id; required for provider "cloudflare"' }),
-    act: z
-      .enum(["tree", "plans"])
-      .optional()
-      .describe(
-        "Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests",
-      ),
-    retryNoEffect: z.boolean().optional(),
-    focusFallback: z.boolean().optional(),
-    cacheCheck: z.boolean().optional(),
-    extract: z.enum(["judge", "pick", "native", "map"]).optional(),
-    actConfidence: z.number().min(0).max(1).optional(),
-    verify: z.enum(["off", "checks", "full"]).optional(),
-    llmFallback: z.boolean().optional(),
-    argumentLlm: z.boolean().optional(),
-    pageState: z.boolean().optional(),
-    tools: z.boolean().optional(),
-    targetReadiness: z.boolean().optional(),
+  })
+  .refine((config) => config.provider !== "cloudflare" || !!config.accountId || !!config.apiUrl, {
+    message: "Cloudflare decisions require accountId or an account-scoped apiUrl",
+    path: ["accountId"],
   })
   .meta({
     id: "ExperimentalDecisionsConfig",

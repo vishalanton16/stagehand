@@ -26,45 +26,29 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("stagehand.experimentalDecisions routing", () => {
   it("gives the decision config only to the namespace methods", async () => {
-    const { router, services, close } = await setup({ apiKey: "decision-key", tools: true });
+    const { router, services, close } = await setup({ apiKey: "decision-key" });
 
     await router.handle(call("stagehand.experimental_decisions_act", { instruction: "click it" }));
     await router.handle(call("stagehand.experimental_decisions_observe", { instruction: "find" }));
     await router.handle(call("stagehand.experimental_decisions_extract", { instruction: "get" }));
 
-    const asked = {
-      apiKey: "decision-key",
-      tools: true,
-      enabled: true,
-      observe: true,
-      extract: "pick",
-    };
+    const asked = { apiKey: "decision-key" };
     expect(services.act.mock.calls[0][0].decisions).toStrictEqual(asked);
-    expect(services.observe.mock.calls[0][0].decisions).toStrictEqual(asked);
+    expect(services.observe.mock.calls[0][0].decisions).toStrictEqual({ ...asked, observe: true });
     expect(services.extract.mock.calls[0][0].decisions).toStrictEqual(asked);
     await close();
   });
 
   it("keeps the plain methods on the LLM path when a decision config exists", async () => {
-    const { router, services, close } = await setup({ apiKey: "decision-key", tools: true });
+    const { router, services, close } = await setup({ apiKey: "decision-key" });
 
     await router.handle(call("stagehand.act", { instruction: "click it" }));
     await router.handle(call("stagehand.observe", { instruction: "find" }));
     await router.handle(call("stagehand.extract", { instruction: "get" }));
 
-    // act keeps the config for its timing log, switched off; the others get nothing at all.
-    expect(services.act.mock.calls[0][0].decisions).toMatchObject({ enabled: false });
+    expect(services.act.mock.calls[0][0].decisions).toBeUndefined();
     expect(services.observe.mock.calls[0][0].decisions).toBeUndefined();
     expect(services.extract.mock.calls[0][0].decisions).toBeUndefined();
-    await close();
-  });
-
-  it("honours the configured extract mode", async () => {
-    const { router, services, close } = await setup({ apiKey: "decision-key", extract: "judge" });
-
-    await router.handle(call("stagehand.experimental_decisions_extract", { instruction: "get" }));
-
-    expect(services.extract.mock.calls[0][0].decisions).toMatchObject({ extract: "judge" });
     await close();
   });
 
@@ -90,6 +74,26 @@ describe("stagehand.experimentalDecisions routing", () => {
     ).resolves.toMatchObject({ data: { success: true } });
     expect(services.act.mock.calls[0][0].decisions).toBeUndefined();
     await close();
+  });
+
+  it("allows decision-only act and extract while observation still requires an LLM", async () => {
+    const { router, services, close } = await setup({ apiKey: "decision-key" }, false);
+    try {
+      await router.handle(call("stagehand.experimental_decisions_act", { instruction: "click" }));
+      await router.handle(
+        call("stagehand.experimental_decisions_extract", { instruction: "read" }),
+      );
+      expect(services.act.mock.calls[0][0].model).toBeUndefined();
+      expect(services.extract.mock.calls[0][0].model).toBeUndefined();
+      await expect(
+        router.handle(call("stagehand.experimental_decisions_observe", { instruction: "find" })),
+      ).rejects.toThrow("LLM was not configured");
+      await expect(router.handle(call("stagehand.act", { instruction: "click" }))).rejects.toThrow(
+        "LLM was not configured",
+      );
+    } finally {
+      await close();
+    }
   });
 
   it("records usage under the same metric names as the plain methods", async () => {
@@ -120,7 +124,10 @@ function call(method: string, params: Record<string, unknown>) {
   });
 }
 
-async function setup(experimentalDecisions: StagehandInitParams["experimentalDecisions"]) {
+async function setup(
+  experimentalDecisions: StagehandInitParams["experimentalDecisions"],
+  withModel = true,
+) {
   const tracing = {
     ...createStagehandTracingRuntime({ registerGlobals: false }),
     configure: vi.fn(async () => {}),
@@ -142,7 +149,7 @@ async function setup(experimentalDecisions: StagehandInitParams["experimentalDec
     clientInfo: { name: "stagehand-sdk-test", version: "1.0.0" },
     browserCdpUrl: "ws://127.0.0.1:9222/devtools/browser/session",
     logLevel: "info",
-    model: { modelName: "openai/gpt-5.4-mini", apiKey: "test" },
+    ...(withModel ? { model: { modelName: "openai/gpt-5.4-mini", apiKey: "test" } } : {}),
     ...(experimentalDecisions ? { experimentalDecisions } : {}),
   });
   vi.spyOn(runtime, "resolveUnderstudyPage").mockReturnValue({} as Page);

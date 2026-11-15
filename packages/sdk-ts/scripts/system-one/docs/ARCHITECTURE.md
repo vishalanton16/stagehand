@@ -1,5 +1,7 @@
 # Architecture
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 ## Intent
 
 Stagehand should treat System One models as **decision / mapping models**, not as free-form extractors.
@@ -39,16 +41,16 @@ experimentalDecisions: {
 
 ## Code map
 
-| Piece | Location |
-| --- | --- |
-| Data view | `packages/extension/services/decisions/dataView.ts` |
-| Map-and-copy | `packages/extension/services/decisions/mapCopy.ts` |
-| Locate / scalar second read | `packages/extension/services/decisions/scalarReader.ts` (Perplexity only) |
-| Production gate | `packages/extension/services/extractService.ts` (`extract === "map"`) |
-| Mode enum | `packages/protocol/schemas.ts` (+ `stagehand.v4.json`, generated Python) |
-| Benchmark re-exports | `packages/sdk-ts/scripts/system-one/{dataView,mapCopy}.ts` |
-| Arms | `packages/sdk-ts/scripts/system-one/arms.ts` (`runtime-decider`, `s1-*`, `map-*`, `agree-*`) |
-| Replay / live | `replay.ts`, `live.ts`, heldout*.ts, corpus.ts |
+| Piece                       | Location                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| Data view                   | `packages/extension/services/decisions/dataView.ts`                                          |
+| Map-and-copy                | `packages/extension/services/decisions/mapCopy.ts`                                           |
+| Locate / scalar second read | `packages/extension/services/decisions/scalarReader.ts` (Perplexity only)                    |
+| Production gate             | `packages/extension/services/extractService.ts` (`extract === "map"`)                        |
+| Mode enum                   | `packages/protocol/schemas.ts` (+ `stagehand.v4.json`, generated Python)                     |
+| Benchmark re-exports        | `packages/sdk-ts/scripts/system-one/{dataView,mapCopy}.ts`                                   |
+| Arms                        | `packages/sdk-ts/scripts/system-one/arms.ts` (`runtime-decider`, `s1-*`, `map-*`, `agree-*`) |
+| Replay / live               | `replay.ts`, `live.ts`, heldout*.ts, corpus.ts                                               |
 
 Production and replay must share the extension modules. Do not fork logic back into the scripts.
 
@@ -89,11 +91,11 @@ Production only runs structural verification. The replay-only yes/no self-check 
 
 ## Provider differences
 
-| Provider | Choice / noul mapping | Scalar second reading |
-| --- | --- | --- |
-| Perplexity Decider / Flash | yes | Locate via `scalarReader` |
-| TypeSafe Jev | yes | none |
-| Cloudflare Clef | yes | none (Clairic is a separate native path) |
+| Provider                   | Choice / noul mapping | Scalar second reading                    |
+| -------------------------- | --------------------- | ---------------------------------------- |
+| Perplexity Decider / Flash | yes                   | Locate via `scalarReader`                |
+| TypeSafe Jev               | yes                   | none                                     |
+| Cloudflare Clef            | yes                   | none (Clairic is a separate native path) |
 
 `"native"` mode (Clairic / Decider extractive APIs) remains a different product surface from `"map"`.
 
@@ -103,10 +105,10 @@ Traces should carry source node IDs and record IDs for copied values. Provenance
 
 ## Related modes (do not confuse)
 
-| Mode | Role |
-| --- | --- |
-| `off` | No decision extract path |
-| `judge` | LLM extracts; decision model judges completion |
-| `pick` | Decision model picks DOM nodes; code copies (older design) |
-| `native` | Provider-native extract (Clairic / Decider extract) |
+| Mode      | Role                                                        |
+| --------- | ----------------------------------------------------------- |
+| `off`     | No decision extract path                                    |
+| `judge`   | LLM extracts; decision model judges completion              |
+| `pick`    | Decision model picks DOM nodes; code copies (older design)  |
+| `native`  | Provider-native extract (Clairic / Decider extract)         |
 | **`map`** | **Record groups + mapping questions + copy + LLM fallback** |

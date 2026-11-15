@@ -26,26 +26,11 @@ import type { Page } from "../understudy/page.js";
 import { type Progress, runWithProgress } from "../understudy/progress.js";
 import { trimTrailingTextNode } from "../utils.js";
 import * as cacheService from "./cacheService.js";
-import { checkCachedAction } from "./decisions/cacheCheck.js";
+import { runDecisionsAct } from "./decisions/act.js";
+import type { DecisionsConfig } from "./decisions/config.js";
 import { guardActionTarget } from "./decisions/actionGuard.js";
-import {
-  runDecisionsAct,
-  type DecisionsConfig,
-  type DecisionsActOutcome,
-} from "./decisions/pipeline.js";
-import { redactor } from "./decisions/args.js";
-import type { DecisionsToolDeps } from "./decisions/toolAct.js";
-import { focusOutline, parseOutline } from "./decisions/tree.js";
-import type { JsonValue } from "./decisions/client.js";
 import * as llmService from "./llmService.js";
 import { disabledCacheMetadata, zeroStagehandResultUsage } from "./resultUsage.js";
-
-// Set high on purpose: on ordinary pages the shortlist cost accuracy (the LLM
-// lost the context that disambiguates), so it is reserved for huge trees where
-// the full-page call is slow and expensive.
-const FOCUS_MIN_TREE_CHARS = 120_000;
-/** Tools registered at load are reported within the listing's quiet window. */
-const LIST_TOOLS_TIMEOUT_MS = 300;
 
 type ActInferenceResponse = Awaited<ReturnType<typeof inference.act>>;
 type ActInferenceElement = NonNullable<ActInferenceResponse["element"]>;
@@ -76,7 +61,6 @@ type ActServiceOptions = {
   cache?: cacheService.CacheContext;
   gateway?: GatewayContext;
   decisions?: DecisionsConfig;
-  openPageCount?: () => number;
   progress?: Progress;
 };
 
@@ -100,20 +84,22 @@ async function actWithProgress(
     cache,
     gateway,
     decisions,
-    openPageCount,
   }: ActServiceOptions,
   progress: Progress,
 ): Promise<ActResult> {
   const { instruction: actInstruction, options } = params;
+  const decisionUsage = zeroStagehandResultUsage();
   if (decisions) {
+    const record = decisions.recordDecisionUsage;
     decisions = {
       ...decisions,
       signal: progress.signal,
-      recordDecisionUsage: (usage) =>
-        logger.info("Decision model usage", {
-          category: "decisions-usage",
-          ...usage,
-        }),
+      recordDecisionUsage: (usage) => {
+        decisionUsage.inputTokens += usage.inputTokens;
+        decisionUsage.outputTokens += usage.outputTokens;
+        record?.(usage);
+        logger.info("Decision model usage", { category: "decisions-usage", ...usage });
+      },
     };
   }
   const variables = options?.variables;
@@ -152,63 +138,8 @@ async function actWithProgress(
     focusLocator: options?.locator,
     ignoreLocators: options?.ignoreLocators,
   };
-  // Listed while the DOM settles, so knowing the page's tools costs the act
-  // nothing. A scoped act is about that element; tools are page-level.
-  const webmcp: DecisionsToolDeps | undefined =
-    decisions?.tools && decisions.enabled !== false && !options?.locator
-      ? {
-          page,
-          // Browsers without the WebMCP domain reject the enable call.
-          tools: page.listWebMCPTools({ timeout: LIST_TOOLS_TIMEOUT_MS }).catch(() => []),
-          fillArguments: async (tool) => {
-            const response = await inference.toolArguments({
-              instruction,
-              tool,
-              variableNames: Object.keys(variables ?? {}),
-              generate: (input) =>
-                llmService.generate(
-                  context.model,
-                  input,
-                  context.clientLLMGenerate,
-                  context.gateway,
-                ),
-            });
-            recordUsage({ ...response, element: null, twoStep: false });
-            const required = Array.isArray(tool.inputSchema?.required)
-              ? tool.inputSchema.required
-              : [];
-            const input = response.input;
-            return input && required.every((name) => typeof name === "string" && name in input)
-              ? (input as Record<string, JsonValue>)
-              : null;
-          },
-        }
-      : undefined;
-  // With the decision model on, the intent request (which needs no page) runs while the DOM
-  // settles; everything that reads or touches the page still waits for it.
-  // performance.now(): tests script Date.now() for inference timing.
-  const actStartedAt = performance.now();
-  const settled = waitForDomNetworkQuiet(page.mainFrame(), logger, domSettleTimeoutMs, progress);
-  // The cache lookup keys on the page's tree and URL, so when a cache is in
-  // play the page must have settled before it; only cache-less acts overlap.
-  const cacheLookup = cache !== undefined && options?.cache !== false;
-  const overlapSettle = decisions !== undefined && decisions.enabled !== false && !cacheLookup;
-  if (overlapSettle) settled.catch(() => {});
-  else await settled;
+  await waitForDomNetworkQuiet(page.mainFrame(), logger, domSettleTimeoutMs, progress);
   progress.throwIfStopped();
-  let actPath:
-    | "llm"
-    | "decisions"
-    | "decisions+arg-llm"
-    | "decisions+llm"
-    | "decisions-tool"
-    | "decisions-tool+arg-llm" = "llm";
-  let usedArgumentLlm = false;
-  // The decision model's shortlist when it narrowed the choice but could not commit.
-  let decisionsFocusIds: string[] = [];
-  let decisionsNoCache = false;
-  // Actions the decision model already performed before abstaining (e.g. expanding a dropdown).
-  let decisionsPriorActions: ActResultData["actions"] = [];
 
   return await cacheService.withCache<ActResult>({
     method: "act",
@@ -219,44 +150,19 @@ async function actWithProgress(
     context: cache,
     logger,
     progress,
-    onHit: async (value) => {
-      await settled;
-      return await replayCachedActions(value, instruction, variables, context);
-    },
+    onHit: (value) => replayCachedActions(value, instruction, variables, context),
     execute: async () => {
-      const startedAt = performance.now();
       const result = await runActPipeline();
-      // Whatever the decision model already did changed the page, whether or not the act
-      // then succeeded: it belongs in the result either way.
-      if (decisionsPriorActions.length > 0) {
-        result.data.actions = [...decisionsPriorActions, ...result.data.actions];
-      }
-      // Experiment instrumentation: one line per act so baseline and decision-model arms
-      // can be compared on latency and LLM usage from the run log alone. Only
-      // with the experimental flag present: the instruction is user content.
-      if (decisions)
-        logger.info("Act pipeline finished", {
-          category: "decisions-eval",
-          instruction,
-          path: actPath,
-          success: result.data.success,
-          durationMs: Math.round(performance.now() - startedAt),
-          // From the start of act(), DOM settle included: what the caller waits for.
-          totalMs: Math.round(performance.now() - actStartedAt),
-          llmInputTokens: result.metadata.usage.inputTokens,
-          llmOutputTokens: result.metadata.usage.outputTokens,
-          llmMs: result.metadata.usage.inferenceTimeMs,
-        });
+      const llmUsage = { ...result.metadata.usage };
+      result.metadata.usage = aggregateUsage(result.metadata.usage, decisionUsage);
       // Act can run several inferences (planning, self-heal), so report the
       // aggregate — without it the server has no basis to compute the token
       // savings a future hit avoided.
-      const { usage } = result.metadata;
+      const usage = llmUsage;
       return {
         result,
         cacheValue:
-          result.data.success && result.data.actions.length > 0 && !decisionsNoCache
-            ? result.data.actions
-            : undefined,
+          result.data.success && result.data.actions.length > 0 ? result.data.actions : undefined,
         llmUsage: {
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
@@ -267,74 +173,34 @@ async function actWithProgress(
   });
 
   async function runActPipeline(): Promise<ActResult> {
-    if (decisions && decisions.enabled !== false) {
-      actPath = "decisions";
+    if (decisions) {
+      const started = performance.now();
       const outcome = await runDecisionsAct(decisions, {
         page,
         logger,
         instruction,
         variables,
         snapshotOptions,
-        ensureTimeRemaining: () => progress.throwIfStopped(),
-        openPageCount,
-        settled,
-        ...(webmcp ? { webmcp } : {}),
-        extractText: async (text) => {
-          const response = await inference.actTextArgument({
-            instruction: text,
-            variableNames: Object.keys(variables ?? {}),
-            generate: (input) =>
-              llmService.generate(context.model, input, context.clientLLMGenerate, context.gateway),
-          });
-          // Only the usage fields are read; the act-shaped extras stay empty.
-          recordUsage({ ...response, element: null, twoStep: false });
-          usedArgumentLlm = true;
-          return response.text;
-        },
-        // Self-heal re-enters LLM inference; a failed decision-model action falls back to
-        // the full LLM pipeline below instead.
-        takeAction: (action) =>
-          takeDeterministicAction({ action, variables, context: { ...context, selfHeal: false } }),
-      }).catch((error: unknown) => {
-        if (error instanceof TimeoutError) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          kind: "fallback",
-          reason: `decision_error:${message}`,
-        } satisfies DecisionsActOutcome as DecisionsActOutcome;
+        progress,
+        takeAction: (action, expectedElementId) =>
+          takeDeterministicAction({
+            action,
+            variables,
+            expectedElementId,
+            context: { ...context, selfHeal: false },
+          }),
       });
-      if (outcome.kind === "done") {
-        decisionsNoCache = outcome.noCache === true;
-        if (usedArgumentLlm) actPath = "decisions+arg-llm";
-        if (outcome.viaTool)
-          actPath = outcome.viaTool.argumentLlm ? "decisions-tool+arg-llm" : "decisions-tool";
-        return actResult(outcome.result, operationUsage);
-      }
-      actPath = "decisions+llm";
-      decisionsPriorActions = outcome.priorActions ?? [];
-      if (outcome.noCache) decisionsNoCache = true;
-      decisionsFocusIds = decisions.focusFallback ? (outcome.focusIds ?? []) : [];
+      decisionUsage.inferenceTimeMs += Math.round(performance.now() - started);
+      if (outcome.kind === "done") return actResult(outcome.result, operationUsage);
       logger.info("Decisions act fell back to the LLM pipeline", {
         category: "decisions",
-        instruction,
         reason: outcome.reason,
       });
-      if (decisions.llmFallback === false) {
-        actPath = "decisions";
-        return actResult(
-          {
-            success: false,
-            // Reasons can carry error text; redact typed values and keep it short.
-            message: `Failed to perform act: the decision model abstained (${(redactor(variables) ?? ((text: string) => text))(outcome.reason).slice(0, 160)})`,
-            actionDescription: instruction,
-            actions: [],
-          },
-          operationUsage,
+      if (!model && !gateway)
+        throw new Error(
+          "Decisions act needs a configured LLM model or Browserbase gateway for fallback",
         );
-      }
     }
-
-    await settled;
     const { combinedTree, combinedXpathMap } = await page.captureSnapshot(
       snapshotOptions,
       progress,
@@ -346,34 +212,8 @@ async function actWithProgress(
       variables,
     );
 
-    // The decision model shortlisted a handful of elements on a big page: show the LLM those
-    // (with ancestors and subtrees) first, and only pay for the whole tree if
-    // it finds nothing there.
-    let firstInference: Awaited<ReturnType<typeof getActionFromLLM>> | undefined;
-    if (decisionsFocusIds.length > 0 && combinedTree.length > FOCUS_MIN_TREE_CHARS) {
-      const focused = focusOutline(parseOutline(combinedTree), decisionsFocusIds);
-      if (focused.trim() && focused.length < combinedTree.length / 2) {
-        progress.throwIfStopped();
-        const attempt = await getActionFromLLM({
-          instruction: actPrompt,
-          domElements: focused,
-          xpathMap: combinedXpathMap,
-          context,
-        });
-        logger.info("the decision model focused LLM fallback", {
-          category: "decisions",
-          instruction,
-          focusIds: decisionsFocusIds.length,
-          focusedChars: focused.length,
-          fullChars: combinedTree.length,
-          found: Boolean(attempt.action),
-        });
-        if (attempt.action) firstInference = attempt;
-      }
-    }
-
     progress.throwIfStopped();
-    firstInference ??= await getActionFromLLM({
+    const firstInference = await getActionFromLLM({
       instruction: actPrompt,
       domElements: combinedTree,
       xpathMap: combinedXpathMap,
@@ -400,10 +240,10 @@ async function actWithProgress(
       action: firstInference.action,
       variables,
       context,
-      expectedElementId: firstInference.response.element?.elementId,
+      expectedElementId: firstInference.expectedElementId,
     });
 
-    if (!firstInference.response.twoStep) {
+    if (!firstInference.response.twoStep || (decisions && !firstResult.success)) {
       return actResult(firstResult, operationUsage);
     }
 
@@ -444,7 +284,7 @@ async function actWithProgress(
       action: secondInference.action,
       variables,
       context,
-      expectedElementId: secondInference.response.element?.elementId,
+      expectedElementId: secondInference.expectedElementId,
     });
 
     return actResult(
@@ -475,35 +315,21 @@ async function replayCachedActions(
     throw new Error("Cached act value contained no usable actions");
   }
 
-  // Replay is blind: a selector that still resolves but now points at another
-  // control gets acted on with no model in the loop. With `cacheCheck`, one decision-model
-  // yes/no runs before each action, against the page as it is right then
-  // (earlier actions of the same entry may have changed it); a stale verdict
-  // throws, which sends the act through full inference.
-  const checking = context.decisions?.cacheCheck === true && context.decisions.enabled !== false;
   const results: ActResultData[] = [];
   for (const action of actions) {
-    if (checking) {
-      const verdict = await validateCachedAction(action, instruction, context, variables).catch(
-        (error: unknown) => {
-          if (error instanceof TimeoutError) throw error;
-          return undefined;
-        },
-      );
-      if (verdict?.verdict === "stale") {
-        throw new Error(
-          // The element's name can echo a value an earlier act typed; redact it like every request.
-          `Cached action no longer matches the page: selector now resolves to "${(redactor(variables) ?? ((text: string) => text))(verdict.found ?? "")}" (match ${verdict.score})`,
-        );
-      }
-    }
     const result = await takeDeterministicAction({
       action,
       variables,
       context: { ...context, selfHeal: false },
     });
     if (!result.success) {
-      throw new Error(result.message);
+      // Only a pre-input rejection on the first action is safe to re-infer.
+      if (!context.decisions || (!results.length && !result.actions.length))
+        throw new Error(result.message);
+      return actResult({
+        ...result,
+        actions: [...results.flatMap((entry) => entry.actions), ...result.actions],
+      });
     }
     results.push(result);
   }
@@ -516,41 +342,6 @@ async function replayCachedActions(
   });
 }
 
-async function validateCachedAction(
-  action: Action,
-  instruction: string,
-  context: ActContext,
-  variables: Variables | undefined,
-) {
-  const decisions = context.decisions!;
-  const { combinedTree, combinedXpathMap } = await context.page.captureSnapshot({});
-  const trace: Record<string, unknown>[] = [];
-  const verdict = await checkCachedAction(
-    {
-      config: decisions,
-      instruction,
-      trace: trace as never,
-      threshold: decisions.actConfidence ?? 0.7,
-      logger: context.logger,
-      ensureTimeRemaining: () => context.progress.throwIfStopped(),
-      redact: redactor(variables),
-    },
-    {
-      tree: combinedTree,
-      xpathMap: combinedXpathMap as Record<string, string>,
-      nodes: parseOutline(combinedTree),
-    },
-    action,
-  );
-  context.logger.info("Decisions cache check", {
-    category: "decisions",
-    instruction,
-    verdict: verdict.verdict,
-    trace: JSON.stringify(trace),
-  });
-  return verdict;
-}
-
 async function getActionFromLLM({
   instruction,
   domElements,
@@ -561,7 +352,7 @@ async function getActionFromLLM({
   domElements: string;
   xpathMap: Record<string, string>;
   context: ActContext;
-}): Promise<{ action?: Action; response: ActInferenceResponse }> {
+}): Promise<{ action?: Action; expectedElementId?: string; response: ActInferenceResponse }> {
   const response = await context.progress.run("waiting for act inference", () =>
     inference.act({
       instruction,
@@ -592,7 +383,17 @@ async function getActionFromLLM({
   const action = response.element
     ? normalizeActInferenceElement(response.element, xpathMap, context.logger)
     : undefined;
-  return action ? { action, response } : { response };
+  if (!action || !response.element) return { response };
+  const originalPath = xpathMap[response.element.elementId];
+  const targetPath = action.selector.slice("xpath=".length);
+  // Text-node inference executes on its parent element. Compare the parent's
+  // snapshot identity, not the backend ID of the text node it contains.
+  const expectedElementId =
+    originalPath === targetPath
+      ? response.element.elementId
+      : (Object.entries(xpathMap).find(([, path]) => path === targetPath)?.[0] ??
+        response.element.elementId);
+  return { action, expectedElementId, response };
 }
 
 async function takeDeterministicAction({
@@ -621,13 +422,27 @@ async function takeDeterministicAction({
     };
   }
 
-  if (context.decisions?.act === "plans") {
+  const placeholderArgs = Array.isArray(action.arguments) ? [...action.arguments] : [];
+  // Drag arguments are selectors, not text templates; page-controlled names must stay literal.
+  const resolvedArgs =
+    method === SupportedUnderstudyAction.DRAG_AND_DROP
+      ? placeholderArgs
+      : (substituteVariablesInArguments(action.arguments, variables) ?? []);
+
+  if (context.decisions) {
     const rejection = await guardActionTarget(
       context.page,
       action,
       context.progress,
       expectedElementId,
     );
+    if (
+      rejection &&
+      context.selfHeal &&
+      (rejection === "target_unresolved" || rejection === "target_replaced")
+    ) {
+      return selfHealAction({ action, method, resolvedArgs, placeholderArgs, context });
+    }
     if (rejection)
       return {
         success: false,
@@ -636,13 +451,6 @@ async function takeDeterministicAction({
         actions: [],
       };
   }
-
-  const placeholderArgs = Array.isArray(action.arguments) ? [...action.arguments] : [];
-  // Drag arguments are selectors, not text templates; page-controlled names must stay literal.
-  const resolvedArgs =
-    method === SupportedUnderstudyAction.DRAG_AND_DROP
-      ? placeholderArgs
-      : (substituteVariablesInArguments(action.arguments, variables) ?? []);
 
   try {
     context.progress.throwIfStopped();
@@ -662,12 +470,12 @@ async function takeDeterministicAction({
     if (error instanceof TimeoutError) throw error;
     const message = error instanceof Error ? error.message : String(error);
 
-    if (!context.selfHeal) {
+    if (!context.selfHeal || context.decisions) {
       return {
         success: false,
         message: `Failed to perform act: ${message}`,
         actionDescription: action.description || `action (${method})`,
-        actions: [],
+        actions: context.decisions ? [action] : [],
       };
     }
 
@@ -705,6 +513,7 @@ async function selfHealAction({
       : `${method} ${action.description}`
     : method;
 
+  let attempted: Action | undefined;
   try {
     context.progress.throwIfStopped();
     const { combinedTree, combinedXpathMap } = await context.page.captureSnapshot(
@@ -729,12 +538,12 @@ async function selfHealAction({
 
     const selector = inferenceResult.action?.selector ?? action.selector;
     context.progress.throwIfStopped();
-    if (context.decisions?.act === "plans") {
+    if (context.decisions) {
       const rejection = await guardActionTarget(
         context.page,
         { ...action, method, selector },
         context.progress,
-        inferenceResult.response.element.elementId,
+        inferenceResult.expectedElementId,
       );
       if (rejection)
         return {
@@ -744,6 +553,7 @@ async function selfHealAction({
           actions: [],
         };
     }
+    attempted = { ...action, method, selector };
     await performUnderstudyMethod(
       context.page,
       context.page.mainFrame(),
@@ -763,7 +573,7 @@ async function selfHealAction({
       success: false,
       message: `Failed to perform act after self-heal: ${message}`,
       actionDescription: action.description || `action (${method})`,
-      actions: [],
+      actions: context.decisions && attempted ? [attempted] : [],
     };
   }
 }

@@ -2,7 +2,11 @@ import * as extractService from "../../../extension/services/extractService.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 import { env } from "node:process";
 import { z } from "zod/v4";
-import { mapCopyExtract, type ListGroupExperiment, type ScalarReader } from "./mapCopy.js";
+import { type ScalarReader } from "./mapCopy.js";
+import { baselineModule } from "./baseline.js";
+type ListGroupExperiment = "schema" | { oracleGroup: string };
+const mapCopyExtract = async (...args: unknown[]) =>
+  (await baselineModule("services/decisions/mapCopy")).mapCopyExtract(...args);
 import { groupLabels } from "./groupLabels.js";
 import {
   cost,
@@ -278,9 +282,11 @@ function runtimeMap(
   model: "decider" | "flash",
   {
     speculateListMapping = false,
+    historicalSource = false,
     experiment,
   }: {
     speculateListMapping?: boolean;
+    historicalSource?: boolean;
     experiment?: "baseline" | "oracle" | Extract<ListGroupExperiment, string>;
   } = {},
 ): Arm {
@@ -303,7 +309,13 @@ function runtimeMap(
       } else if (experiment !== "baseline") {
         groupExperiment = experiment;
       }
-      const result = await extractService.extract({
+      const historical =
+        historicalSource ||
+        speculateListMapping ||
+        experiment === "oracle" ||
+        experiment === "schema";
+      const service = historical ? await baselineModule("services/extractService") : extractService;
+      const result = await service.extract({
         params: {
           pageId: "replay",
           instruction: context.task.instruction,
@@ -322,7 +334,7 @@ function runtimeMap(
         decisions: {
           ...decisionConfigs[model],
           ...(experiment ? { model: "pplx-decider-v1.3" } : {}),
-          extract: "map",
+          ...(historical ? { extract: "map" } : {}),
           recordDecisionUsage: ({ inputTokens, outputTokens }) => {
             count(decisionUsage, inputTokens, outputTokens);
             count(context.usage, inputTokens, outputTokens);
@@ -342,8 +354,7 @@ function runtimeMap(
           );
         },
         logger: context.logger,
-        speculateListMapping,
-        groupExperiment,
+        ...(historical ? { speculateListMapping, groupExperiment } : {}),
       });
       Object.assign(context.usage, {
         inputTokens: result.metadata.usage.inputTokens,
@@ -370,6 +381,7 @@ function runtimeMap(
 
 export const extraArms: Record<string, Arm> = {
   "runtime-decider": runtimeMap("decider"),
+  "baseline-decider": runtimeMap("decider", { historicalSource: true }),
   "runtime-decider-speculative": runtimeMap("decider", { speculateListMapping: true }),
   "runtime-flash": runtimeMap("flash"),
   "runtime-decider-v13": runtimeMap("decider", { experiment: "baseline" }),

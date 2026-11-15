@@ -1,8 +1,10 @@
 # Experimental record extraction
 
+The public configuration now needs only provider credentials and an optional model. Historical `map`, `plans`, and tree comparisons below belong to the recorded baseline. See [cleanup status and current reproduction](./docs/CLEANUP_RESULTS.md).
+
 Agent handoff docs: [docs/INDEX.md](./docs/INDEX.md) (review, next steps, evaluation, architecture, roadmap, directions).
 
-Configure the existing experimental namespace with `extract: "map"`. Stagehand builds record groups, asks the configured decision model to select groups and fields, and copies values from the snapshot. Perplexity also reads scalar evidence with Locate using the same model. Detected disagreements, unsupported schemas, and invalid output use the configured LLM fallback.
+Configure the existing experimental namespace with provider credentials and an optional model. Stagehand builds record groups, asks the configured decision model to select groups and fields, and copies values from the snapshot. Perplexity also reads scalar evidence with Locate using the same model. Detected disagreements, unsupported schemas, and invalid output use the configured LLM fallback.
 
 Add this configuration to `Stagehand.create()`, alongside your browser and fallback model.
 
@@ -10,12 +12,11 @@ Add this configuration to `Stagehand.create()`, alongside your browser and fallb
 experimentalDecisions: {
   provider: "perplexity",
   apiKey: process.env.PERPLEXITY_API_KEY!,
-  model: "pplx-decider-latest",
-  extract: "map",
+  model: "pplx-decider-v1.3",
 }
 ```
 
-Call `stagehand.experimentalDecisions.extract(instruction, schema, { page })`. TypeSafe and Cloudflare can map fields through their choice APIs. Their scalar results receive structural checks. Perplexity also uses Locate to check selected scalar values. The existing `"native"` mode remains available for Clairic and Decider extraction.
+Call `stagehand.experimentalDecisions.extract(instruction, schema, { page })`. TypeSafe and Cloudflare can map fields through their choice APIs. Their scalar results receive structural checks. Perplexity also uses Locate to check selected scalar values. Clairic and whole-page Locate remain research readers outside the runtime.
 
 The implementation lives in `packages/extension/services/decisions/dataView.ts` and `mapCopy.ts`. Replay imports those modules. The runtime validates output against the caller's schema and propagates the operation deadline. It omits absent optional values, returns null for absent required nullable scalar fields, and preserves explicit zero. Unresolved required non-nullable values trigger fallback. Unsupported nested objects use fallback. Set `llmFallback: false` to receive an abstention error.
 

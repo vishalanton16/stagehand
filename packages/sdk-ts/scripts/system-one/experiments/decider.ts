@@ -4,9 +4,12 @@ import type {
   StagehandResultUsage,
 } from "@browserbasehq/stagehand-protocol/types";
 import { z } from "zod/v4";
-import type { Page } from "../../understudy/page.js";
-import type { Progress } from "../../understudy/progress.js";
-import { disabledCacheMetadata, zeroStagehandResultUsage } from "../resultUsage.js";
+import type { Page } from "../../../../extension/understudy/page.js";
+import type { Progress } from "../../../../extension/understudy/progress.js";
+import {
+  disabledCacheMetadata,
+  zeroStagehandResultUsage,
+} from "../../../../extension/services/resultUsage.js";
 
 const responseSchema = z.object({
   answers: z.record(

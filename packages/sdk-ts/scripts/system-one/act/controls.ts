@@ -38,7 +38,11 @@ const cases = [
 writeFileSync(
   join(dir, "manifest.json"),
   JSON.stringify(
-    { kind: "controlled-dom-compatibility", cases, decisionModel: "pplx-decider-flash-v1.3" },
+    {
+      kind: "controlled-dom-compatibility",
+      cases,
+      decisionModel: process.env.ACT_MODEL ?? "pplx-decider-v1.3",
+    },
     null,
     2,
   ),
@@ -57,8 +61,7 @@ const stagehand = await Stagehand.create({
   experimentalDecisions: {
     provider: "perplexity",
     apiKey: process.env.PERPLEXITY_API_KEY!,
-    model: "pplx-decider-flash-v1.3",
-    act: "plans",
+    ...(process.env.ACT_MODEL ? { model: process.env.ACT_MODEL } : {}),
   },
   logging: { level: "off" },
 });

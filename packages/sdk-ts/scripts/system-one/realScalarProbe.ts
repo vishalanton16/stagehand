@@ -8,7 +8,7 @@ import {
   type JsonSchema,
   type TraceEntry,
 } from "../../../extension/services/decisions/mapCopy.js";
-import type { DecisionsConfig } from "../../../extension/services/decisions/pipeline.js";
+import type { DecisionsConfig } from "../../../extension/services/decisions/config.js";
 import { scalarReader } from "../../../extension/services/decisions/scalarReader.js";
 import { runWithProgress } from "../../../extension/understudy/progress.js";
 import { CORPUS_DIR } from "./capture.js";
@@ -327,8 +327,6 @@ async function copy(pack: Pack, checkOnly: boolean) {
           trace,
           reader: checkOnly ? scalarReader(config, progress) : undefined,
           readerChecks: checkOnly,
-          verify: true,
-          askVerifier: false,
         });
       },
     );

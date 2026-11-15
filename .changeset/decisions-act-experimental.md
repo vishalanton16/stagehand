@@ -4,4 +4,4 @@
 "@browserbasehq/stagehand-python": patch
 ---
 
-`act()` can resolve common instructions (click, type, select, scroll, press) in a few hundred milliseconds through TypeSafe Jev instead of a full LLM call, behind the new experimental, off-by-default `experimentalDecisions` init param (TypeScript SDK: `STAGEHAND_EXPERIMENTAL_DECISIONS`). When the decision model is not confident the existing LLM path runs unchanged.
+Resolve experimental actions by choosing a complete click or literal fill, with target identity and eligibility checks. Unsupported or uncertain requests use the configured LLM; failures after possible input do not repeat the instruction.

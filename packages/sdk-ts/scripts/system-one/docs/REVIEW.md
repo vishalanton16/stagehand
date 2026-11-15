@@ -1,5 +1,7 @@
 # Review: uncommitted System One changes
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Reviewed on November 14, 2026, against commit `632789220` ("Benchmark System One extraction with LLM fallback").
 
 ## Summary
@@ -29,6 +31,7 @@ Not verified: the behaviour changes listed below have only been measured on held
 
 **H1. No regression run after behaviour changes.**
 The move changed behaviour in several places, not just imports:
+
 - exact equality for the Locate cross-check;
 - required missing values become problems or errors instead of `""`;
 - empty list items are no longer dropped;
@@ -48,6 +51,7 @@ The call adds a sequential round trip to every extraction. It probably contribut
 
 **H3. The system prompt is merged into the instruction the mapper sees.**
 The call `mapCopyExtract(config, { instruction: [systemPrompt, instruction].join("\n") })` feeds the system prompt into everything that reads the instruction:
+
 - `countOptions`, so numbers in a system prompt become candidate item counts;
 - `tokens()`-based ranking of groups, slots and facts;
 - the text of every decision question.
@@ -76,11 +80,11 @@ This is an LLM-extraction fix that is independent of System One. Consider a sepa
 **M6. Heading-scoped groups multiply candidates.**
 Measured with `buildDataView` on the frozen corpus:
 
-| Page | Groups before | Groups after |
-|---|---|---|
-| Craigslist | 28 | 96 |
-| MDN status codes | 19 | 36 |
-| Apollo 11 | 413 | 470 |
+| Page             | Groups before | Groups after |
+| ---------------- | ------------- | ------------ |
+| Craigslist       | 28            | 96           |
+| MDN status codes | 19            | 36           |
+| Apollo 11        | 413           | 470          |
 
 Build time barely moved; the largest page went from 343 ms to 451 ms. But `rankGroups` keeps only the top 8, so on heading-heavy pages a real list can now be pushed out of the candidate set. Add a diagnostic for "the gold group was not among the candidates" in replay, and watch it.
 

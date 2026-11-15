@@ -1257,9 +1257,6 @@ async def test_create_forwards_experimental_decisions_to_init_params(
         "model": "clef-1",
         "api_url": "https://decisions.example/v1",
         "account_id": "account-1",
-        "act_confidence": 0.8,
-        "verify": "checks",
-        "llm_fallback": False,
     }
 
     await Stagehand.create(browser=browser, experimental_decisions=experimental_decisions)

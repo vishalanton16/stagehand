@@ -4,4 +4,4 @@
 "@browserbasehq/stagehand-python": patch
 ---
 
-The experimental `experimentalDecisions` path can use other decision models: `provider: "cloudflare"` (Clef on Workers AI, needs `accountId`), `"perplexity"` (Decider), next to the default `"typesafe"` (Jev). Answers from every provider are validated before they are acted on.
+Default experimental decisions to pinned Perplexity Decider v1.3. Retain TypeSafe and Cloudflare adapters and explicit model selection. Use shared transport and answer validation for choices, predicates and supported exact-span reading.

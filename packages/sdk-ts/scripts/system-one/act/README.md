@@ -1,5 +1,7 @@
 # Action experiments
 
+The public configuration now needs only provider credentials and an optional model. Historical `map`, `plans`, and tree comparisons below belong to the recorded baseline. See [cleanup status and current reproduction](../docs/CLEANUP_RESULTS.md).
+
 These scripts capture real page states, freeze action labels, compare policies on identical snapshots and validate outcomes through the public SDK. [Results](../docs/ACT_RESULTS.md) and [design](../docs/ACT_EXPERIMENTS.md) explain the workload and its limits.
 
 Requires a built extension, `PERPLEXITY_API_KEY` and the existing Luna gateway configuration in the repository `.env`. Provider replays also use the existing TypeSafe or Cloudflare credentials. Keys are never written into manifests or request archives.
@@ -20,7 +22,7 @@ ACT_MODEL=pplx-decider-flash-v1.3 ACT_ROUNDS=3 node --env-file=.env --import tsx
 node packages/sdk-ts/scripts/system-one/act/summarize.mjs vendor-repos/system-one-corpus/runs/act/new-live
 ```
 
-`ACT_ARMS` selects comma-separated arms. Replay defaults to `known-dual,known-single,plans,legacy,luna`; live defaults to `luna,tree,plans`. Known-operation arms receive the operation and argument, so their timings are a separate comparison. `plans-nodest` and `plans-full` isolate representation changes. `ACT_TASKS` limits task names; `ACT_SITE` limits capture sites. Replay uses three concurrent tasks; live execution is sequential with rotated arm order.
+`ACT_ARMS` selects comma-separated arms. Replay defaults to `known-dual,known-single,plans,legacy,luna`; live defaults to `luna,plans`. The legacy replay controls require the prepared baseline archive. Known-operation arms receive the operation and argument, so their timings are a separate comparison. `plans-nodest` and `plans-full` isolate representation changes. `ACT_TASKS` limits task names; `ACT_SITE` limits capture sites. Replay uses three concurrent tasks; live execution is sequential with rotated arm order.
 
 For provider-only replay, set `ACT_ARMS=plans`, `ACT_PROVIDER=typesafe` or `cloudflare`, and optionally `ACT_MODEL`. Defaults are pinned Jev `jev-1.14.0`, `clef-flash` and Decider `pplx-decider-v1.3`. Do not interpret a shared confidence gate as calibrated across providers.
 

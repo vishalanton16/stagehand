@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildView,
-  describeCandidate,
-  nativeSelectOptions,
-  selectedNativeOptions,
-  parseOutline,
-} from "../services/decisions/tree.js";
+import { buildView, describeCandidate, parseOutline } from "../services/decisions/tree.js";
 
 const OUTLINE = [
   "[0-1] RootWebArea: Contact",
@@ -40,9 +34,7 @@ describe("decisions act outline parsing", () => {
       buildView(nodes, kind).map((node) => node.id);
 
     expect(ids("pointer")).toEqual(["0-6", "0-11", "0-13"]);
-    expect(ids("select")).toEqual(["0-6", "0-7", "0-11", "0-13"]);
     expect(ids("input")).toEqual(["0-5"]);
-    expect(ids("scroll")).toEqual(["0-1"]);
   });
 
   it("describes candidates with ancestor, heading, and label context", () => {
@@ -55,19 +47,6 @@ describe("decisions act outline parsing", () => {
       under_heading: "Contact us",
     });
     expect(describeCandidate(nodes, nodes[4]!)).toMatchObject({ near_text: "First name" });
-  });
-
-  it("lists native select options", () => {
-    const nodes = parseOutline(OUTLINE);
-
-    expect(nativeSelectOptions(nodes, nodes[6]!)).toEqual(["Red", "Green"]);
-    expect(nativeSelectOptions(nodes, nodes[10]!)).toEqual([]);
-    expect(selectedNativeOptions(nodes, nodes[6]!)).toEqual(["Red"]);
-  });
-
-  it("does not treat an ARIA listbox with option children as a native select", () => {
-    const nodes = parseOutline(["[0-1] listbox: Country", "  [0-2] option: Canada"].join("\n"));
-    expect(nativeSelectOptions(nodes, nodes[0]!)).toEqual([]);
   });
 
   it("joins continuation lines into the previous name and numbers identical controls", () => {

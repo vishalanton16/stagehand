@@ -1,5 +1,7 @@
 # Decision-model research for Stagehand extraction
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Reviewed November 15, 2026. The proposed experiments use the captured browser state as their source and retain one decision model plus the configured LLM fallback.
 
 | Source                                                                                                                                                                                                                                       | Finding                                                                                                                                                                                                                                                                   | Implication for Stagehand                                                                                                                                                                                                            |

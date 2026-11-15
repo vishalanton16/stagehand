@@ -30,7 +30,6 @@ describe("System One missing values", () => {
         },
         tree: "[0-1] heading: Example",
         urlMap: {},
-        verify: true,
       },
     );
     expect(outcome.data).toEqual({ stars: null });
@@ -62,7 +61,8 @@ describe("System One composite labels", () => {
           Object.entries(questions).map(([key, question]) => {
             if (question.type === "noul")
               return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
-            const choices = Object.entries(question.criteria);
+            if (question.type !== "choice") throw new Error("Expected a choice");
+            const choices = Object.entries(question.type === "choice" ? question.criteria : {});
             const span = choices.find(
               ([, label]) =>
                 typeof label === "string" &&
@@ -105,7 +105,8 @@ describe("System One composite labels", () => {
         Object.entries(questions).map(([key, question]) => {
           if (question.type === "noul")
             return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
-          const choice = Object.keys(question.criteria)[0]!;
+          if (question.type !== "choice") throw new Error("Expected a choice");
+          const choice = Object.keys(question.type === "choice" ? question.criteria : {})[0]!;
           return [
             key,
             { type: "choice" as const, choice, probabilities: { [choice]: 1 }, confidence: 1 },
@@ -138,7 +139,7 @@ describe("System One composite labels", () => {
         Object.entries(questions).map(([key, question]) => {
           if (question.type === "noul")
             return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
-          const options = Object.entries(question.criteria);
+          const options = Object.entries(question.type === "choice" ? question.criteria : {});
           const choice =
             options.find(
               ([, label]) =>
@@ -179,9 +180,9 @@ describe("System One composite labels", () => {
           Object.entries(questions).map(([key, question]) => {
             if (question.type === "noul")
               return [key, { type: "noul" as const, noul: key.startsWith("is_") ? 1 : 0 }];
-            let choice = Object.keys(question.criteria)[0]!;
+            let choice = Object.keys(question.type === "choice" ? question.criteria : {})[0]!;
             if (key === "f_name" && stripPrefix) {
-              choice = Object.entries(question.criteria).find(
+              choice = Object.entries(question.type === "choice" ? question.criteria : {}).find(
                 ([, label]) =>
                   typeof label === "string" &&
                   label.startsWith("Text after the leading numeric identifier"),
@@ -216,8 +217,6 @@ describe("System One composite labels", () => {
           },
           tree: "[0-1] list\n  [0-2] listitem: 101 Bronze\n  [0-3] listitem: 102 Silver\n  [0-4] listitem: 103 Gold",
           urlMap: {},
-          verify: true,
-          askVerifier: false,
         },
       );
       expect(outcome.data.items).toEqual([
@@ -235,7 +234,10 @@ it("omits an optional number when its candidate does not explicitly state the fi
     answers: Object.fromEntries(
       Object.entries(questions).map(([key, question]) => {
         if (question.type === "noul") return [key, { type: "noul", noul: 0 }];
-        const choice = key === "record_group" ? "none" : Object.keys(question.criteria)[0]!;
+        const choice =
+          key === "record_group"
+            ? "none"
+            : Object.keys(question.type === "choice" ? question.criteria : {})[0]!;
         return [key, { type: "choice", choice, probabilities: { [choice]: 1 }, confidence: 1 }];
       }),
     ),
@@ -254,9 +256,6 @@ it("omits an optional number when its candidate does not explicitly state the fi
       tree: "[0-1] heading: Example Product 2.0",
       urlMap: {},
       reader: async () => ({ edition: "2.0" }),
-      readerChecks: true,
-      verify: true,
-      askVerifier: false,
     },
   );
   expect(result.data).toEqual({ title: "Example Product 2.0" });
@@ -284,52 +283,8 @@ it("skips field mapping when the group check rejects a standalone list", async (
         },
         tree: "[0-1] list\n  [0-2] listitem: Bronze\n  [0-3] listitem: Silver\n  [0-4] listitem: Gold",
         urlMap: {},
-        verify: true,
-        askVerifier: false,
       },
     ),
   ).rejects.toThrow("group-disagree:items");
   expect(decide).toHaveBeenCalledTimes(1);
-});
-
-it("starts speculative field mapping before group selection completes", async () => {
-  const mappingStarted = Promise.withResolvers<void>();
-  let calls = 0;
-  vi.spyOn(client, "decide").mockImplementation(async (_config, _state, questions) => {
-    calls++;
-    if (questions.group) await mappingStarted.promise;
-    if (questions.f_items) mappingStarted.resolve();
-    return {
-      model: "test",
-      answers: Object.fromEntries(
-        Object.entries(questions).map(([key, question]) => {
-          if (question.type === "noul")
-            return [key, { type: "noul", noul: key.startsWith("is_") ? 1 : 0 }];
-          const choice = Object.keys(question.criteria)[0]!;
-          return [key, { type: "choice", choice, probabilities: { [choice]: 1 }, confidence: 1 }];
-        }),
-      ),
-      usage: { inputTokens: 1, outputTokens: 1 },
-      durationMs: 1,
-    };
-  });
-  const outcome = await mapCopyExtract(
-    { apiKey: "test" },
-    {
-      instruction: "Extract every item.",
-      schema: {
-        type: "object",
-        required: ["items"],
-        properties: { items: { type: "array", items: { type: "string" } } },
-      },
-      tree: "[0-1] list\n  [0-2] listitem: Bronze\n  [0-3] listitem: Silver\n  [0-4] listitem: Gold",
-      urlMap: {},
-      speculateListMapping: true,
-      verify: true,
-      askVerifier: false,
-    },
-  );
-  expect(outcome.data.items).toEqual(["Bronze", "Silver", "Gold"]);
-  expect(outcome.verdict?.problems).toEqual([]);
-  expect(calls).toBe(2);
 });

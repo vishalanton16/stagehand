@@ -4,4 +4,4 @@
 "@browserbasehq/stagehand-python": patch
 ---
 
-experimental decisions path: opt-in `tools` lets `act()` invoke a WebMCP tool the page registered when the decision model is confident the tool fulfils the instruction
+Retire prototype decision-based WebMCP routing and its configuration flag. Independent WebMCP browser APIs remain available.

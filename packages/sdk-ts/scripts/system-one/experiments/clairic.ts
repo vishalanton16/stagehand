@@ -4,10 +4,13 @@ import type {
   StagehandResultUsage,
 } from "@browserbasehq/stagehand-protocol/types";
 import { z } from "zod/v4";
-import { bytesToBase64 } from "../../understudy/fileUploadUtils.js";
-import type { Page } from "../../understudy/page.js";
-import type { Progress } from "../../understudy/progress.js";
-import { disabledCacheMetadata, zeroStagehandResultUsage } from "../resultUsage.js";
+import { bytesToBase64 } from "../../../../extension/understudy/fileUploadUtils.js";
+import type { Page } from "../../../../extension/understudy/page.js";
+import type { Progress } from "../../../../extension/understudy/progress.js";
+import {
+  disabledCacheMetadata,
+  zeroStagehandResultUsage,
+} from "../../../../extension/services/resultUsage.js";
 
 type Scalar = "text" | "number" | "date" | "time" | "datetime";
 type Field = (

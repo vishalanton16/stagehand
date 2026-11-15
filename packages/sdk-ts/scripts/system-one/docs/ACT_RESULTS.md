@@ -1,5 +1,7 @@
 # Action experiment results
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Measured 2026-11-15. The new opt-in `act: "plans"` selects one complete action, including its operation, target and literal arguments. It checks the selected node's identity and evidence before input. Execution checks also cover Luna fallback, including disabled and readonly controls. Ordinary `act()` and the default experimental action tree keep their existing behavior.
 
 On the final paired live comparison, Flash with this policy matched Luna on all 27 runs, with 56% lower SDK action median and 62% lower estimated uncached model cost. These are nine tasks on three domains, repeated three times. The result supports this bounded experimental policy, not a general browser-agent accuracy claim.

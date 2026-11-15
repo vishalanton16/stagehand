@@ -4,13 +4,10 @@ import { resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod/v4";
 import { mapCopyExtract, type JsonSchema } from "../../../extension/services/decisions/mapCopy.js";
-import type { DecisionsConfig } from "../../../extension/services/decisions/pipeline.js";
+import type { DecisionsConfig } from "../../../extension/services/decisions/config.js";
 import { scalarReader } from "../../../extension/services/decisions/scalarReader.js";
-import type { HtmlTable, TableField } from "../../../extension/services/decisions/tableBinding.js";
-import {
-  extractTableScalar,
-  prepareTableScalarFromTables,
-} from "../../../extension/services/decisions/tableScalar.js";
+import type { HtmlTable, TableField } from "./experiments/tableBinding.js";
+import { extractTableScalar, prepareTableScalarFromTables } from "./experiments/tableScalar.js";
 import { runWithProgress } from "../../../extension/understudy/progress.js";
 
 type Field = TableField & { pattern?: string };
@@ -241,9 +238,6 @@ async function run(pack: Pack, arm: Arm, round: number) {
             tree: snapshot.formattedTree,
             urlMap: snapshot.urlMap,
             reader: scalarReader(config, progress),
-            readerChecks: true,
-            verify: true,
-            askVerifier: false,
           });
           trace.push(...result.trace);
           if (result.verdict?.problems.length) throw new Error(result.verdict.problems.join(","));

@@ -1,5 +1,7 @@
 # Decision primitives and extraction evidence
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 ## What the providers expose
 
 | Provider              | Contract and implication for Stagehand                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -57,14 +59,14 @@ These fixtures establish the distinction between span selection, normalization, 
 
 Eight captured pages and a synthetic zero/absence control ran twice. The evaluator froze the expected values and each page's Stagehand fact sheet before calling providers. Locate and Clairic received identical sheets and field instructions. Direct copy used the current mapper on the same snapshots, with its fact choices and record-group lookup. The check-only arm used the SDK's production scalar reader and acceptance checks. The two mapper arms stop at abstention, so their costs exclude Luna.
 
-| Arm | All fields correct and accepted | Correct fields | Exact spans | Median | Mean billed input tokens | Cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Decider direct copy | 8/18 | 22/36 | — | 582 ms | 2,464 | $0.0493 |
-| Decider + SDK check-only Locate | 10/18 | 26/36 | — | 700 ms | 3,346 | $0.0669 |
-| Decider v1.3 Locate | 18/18 | 36/36 | 30/30 | 509 ms | 883 | $0.0177 |
-| Decider Flash v1.3 Locate | 14/18 | 32/36 | 20/30 | 390 ms | 883 | $0.0088 |
-| Clairic text | 10/18 | 26/36 | 24/30 | 340 ms | 1,825 | $0.1825 |
-| Clairic typed | 8/18 | 24/36 | 10/12 | 275 ms | 1,426 | $0.1426 |
+| Arm                             | All fields correct and accepted | Correct fields | Exact spans | Median | Mean billed input tokens | Cost per 1,000 |
+| ------------------------------- | ------------------------------: | -------------: | ----------: | -----: | -----------------------: | -------------: |
+| Decider direct copy             |                            8/18 |          22/36 |           — | 582 ms |                    2,464 |        $0.0493 |
+| Decider + SDK check-only Locate |                           10/18 |          26/36 |           — | 700 ms |                    3,346 |        $0.0669 |
+| Decider v1.3 Locate             |                           18/18 |          36/36 |       30/30 | 509 ms |                      883 |        $0.0177 |
+| Decider Flash v1.3 Locate       |                           14/18 |          32/36 |       20/30 | 390 ms |                      883 |        $0.0088 |
+| Clairic text                    |                           10/18 |          26/36 |       24/30 | 340 ms |                    1,825 |        $0.1825 |
+| Clairic typed                   |                            8/18 |          24/36 |       10/12 | 275 ms |                    1,426 |        $0.1426 |
 
 Exact-span scoring requires the expected text at a valid offset. Where a value could come from several places, the grader checks the required source row. Typed numeric responses and mapper outputs do not supply comparable offsets. The typed Clairic denominator covers its text fields only. Absence is scored separately. Both Locate variants omitted all six absent fields. Both Clairic variants returned a value for every absent field, including a textbook edition and a defect total. The providers completed every request without truncation. Costs use returned input-token counts and published rates. Output tokens are free for these arms. [Perplexity pricing](https://docs.perplexity.ai/docs/getting-started/pricing#decisions-api-pricing) · [Clairic billing](https://developers.cloudflare.com/workers-ai/models/clairic/)
 
@@ -78,12 +80,12 @@ Reproduce with `node --env-file=.env --import tsx packages/sdk-ts/scripts/system
 
 Seven fresh pages and two synthetic controls ran twice through the public SDK. The graders came from browser captures and were frozen before any provider call. Locate-first used the same fact shortlist as the SDK reader, with at most eight flat scalar fields and 12,000 characters of evidence. It required an exact Unicode offset and schema-valid output. Numeric spans had to contain a single literal number. A missing required span sent the request directly to Luna.
 
-| Approach | Passed | Wrong direct accepts | Luna fallbacks | Extraction p50 / p95 | Cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Current SDK | 18/18 | 0 | 6 | 1.25 / 15.23 s | $0.302 |
-| Locate-first | 16/18 | 2 | 2 | 0.66 / 4.87 s | $0.037 |
-| Luna | 17/18 | — | — | 4.01 / 9.57 s | $1.211 |
-| Required-only routing, posthoc | 18/18 | 0 | 2 | 0.66 / 4.87 s | $0.053 |
+| Approach                       | Passed | Wrong direct accepts | Luna fallbacks | Extraction p50 / p95 | Cost per 1,000 |
+| ------------------------------ | -----: | -------------------: | -------------: | -------------------: | -------------: |
+| Current SDK                    |  18/18 |                    0 |              6 |       1.25 / 15.23 s |         $0.302 |
+| Locate-first                   |  16/18 |                    2 |              2 |        0.66 / 4.87 s |         $0.037 |
+| Luna                           |  17/18 |                    — |              — |        4.01 / 9.57 s |         $1.211 |
+| Required-only routing, posthoc |  18/18 |                    0 |              2 |        0.66 / 4.87 s |         $0.053 |
 
 Extraction time starts after navigation and includes snapshot capture. The p95 is the slowest run at this sample size. Costs use provider-reported usage, including the Luna fallback. The current SDK used 94,364 Decider input tokens and 32,276 Luna input / 625 output. Locate-first used 23,004 Decider input tokens and 1,160 Luna input / 165 output. Luna alone used 202,689 input / 3,060 output. None of the Luna calls reported cached input. [Perplexity pricing](https://docs.perplexity.ai/docs/getting-started/pricing#decisions-api-pricing) · [Vercel Luna pricing](https://vercel.com/ai-gateway/models/gpt-6-luna)
 
@@ -97,11 +99,11 @@ Archive `runs/plan-validation/locate-primary-20261115T054618Z/` contains the cap
 
 Seven new pages each ran twice through the public SDK. Five tasks had only required fields and two had an optional field. The candidate used Locate-first for the five eligible tasks and the current mapper for both optional schemas. The candidate also rejects unsafe integers before copying them into a JavaScript number.
 
-| Approach | Passed | Wrong direct accepts | Luna fallbacks | Extraction p50 / p95 | Cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Current SDK | 12/14 | 0 | 12 | 4.56 / 6.95 s | $3.002 |
-| Required-only routing | 10/14 | 2 | 4 | 1.00 / 4.52 s | $0.234 |
-| Luna alone | 10/14 | — | — | 2.62 / 4.34 s | $2.955 |
+| Approach              | Passed | Wrong direct accepts | Luna fallbacks | Extraction p50 / p95 | Cost per 1,000 |
+| --------------------- | -----: | -------------------: | -------------: | -------------------: | -------------: |
+| Current SDK           |  12/14 |                    0 |             12 |        4.56 / 6.95 s |         $3.002 |
+| Required-only routing |  10/14 |                    2 |              4 |        1.00 / 4.52 s |         $0.234 |
+| Luna alone            |  10/14 |                    — |              — |        2.62 / 4.34 s |         $2.955 |
 
 Extraction timing includes snapshot capture after navigation. The p95 equals the slowest run at this sample size. Cost includes fallback and uses reported tokens. The current SDK used 62,554 Decider input tokens and 404,264 Luna input / 1,395 output, including 3,819 cached input tokens. The candidate used 32,674 Decider input tokens and 23,662 Luna input / 508 output. Luna alone used 408,655 input / 1,686 output, including 3,739 cached input tokens. Replacing the large IETF and NGINX snapshots with bounded sheets contributed to the cost gap.
 
@@ -119,21 +121,21 @@ Archive `runs/plan-validation/locate-required-20261115T055615Z/` has the seven c
 
 Five fresh pages supplied six tasks, including a required code whose table cell was empty. Each task ran twice. The grader and candidate lists were frozen before provider calls. The prototype expands HTML row and column spans, labels cells with their row and column, and gives Decider up to 16 candidates per field. Code copies the selected cell or abstains if the value is missing. The stricter arm asks separate row and column questions in the same request and checks that both match the chosen cell.
 
-| Fresh comparison | Passed | Wrong accepts | Positive tasks sent to fallback | Median | Decider cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Required-only Locate | 10/12 | 0 | 2 | 722 ms | $0.0243 |
-| Current mapper and check-only Locate | 10/12 | 0 | 2 | 820 ms | $0.0837 |
-| Labeled cell choice and copy | 10/12 | 0 | 2 | 509 ms | $0.0306 |
-| Cell choice with row and column agreement | 10/12 | 0 | 2 | 608 ms | $0.0516 |
+| Fresh comparison                          | Passed | Wrong accepts | Positive tasks sent to fallback | Median | Decider cost per 1,000 |
+| ----------------------------------------- | -----: | ------------: | ------------------------------: | -----: | ---------------------: |
+| Required-only Locate                      |  10/12 |             0 |                               2 | 722 ms |                $0.0243 |
+| Current mapper and check-only Locate      |  10/12 |             0 |                               2 | 820 ms |                $0.0837 |
+| Labeled cell choice and copy              |  10/12 |             0 |                               2 | 509 ms |                $0.0306 |
+| Cell choice with row and column agreement |  10/12 |             0 |                               2 | 608 ms |                $0.0516 |
 
 All arms abstained on the missing Klingon code. Those two abstentions count as passes. Required-only Locate rejected the correct PostgreSQL span `16 bytes` because it expects a bare number. Cell copy normalized the byte count. The current mapper and both cell arms missed the Albanian task. The selected cell contains both the bibliographic code and the terminology code, so copying the whole cell fails the schema. The agreement check also saw different row IDs for two fully identical rows of the same table.
 
 The follow-up compared two ways to recover sub-values. Both call Locate only when the selected, nonempty cell cannot be copied as the requested type. The agreement arm allows an equivalent row only when the entire expanded row matches inside the same table. It still requires the same column.
 
-| Follow-up across the fresh cases and NIST | Passed | Wrong accepts | Median | Decider cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: |
-| Choose one labeled cell, Locate inside that cell if needed | 14/14 | 0 | 539 ms | $0.0300 |
-| Require matching row and column, with equivalent rows allowed | 14/14 | 0 | 510 ms | $0.0505 |
+| Follow-up across the fresh cases and NIST                     | Passed | Wrong accepts | Median | Decider cost per 1,000 |
+| ------------------------------------------------------------- | -----: | ------------: | -----: | ---------------------: |
+| Choose one labeled cell, Locate inside that cell if needed    |  14/14 |             0 | 539 ms |                $0.0300 |
+| Require matching row and column, with equivalent rows allowed |  14/14 |             0 | 510 ms |                $0.0505 |
 
 Both variants recovered the NIST symbols by selecting the actual Symbol cells. Both extracted Albanian's terminology code from inside its selected cell and abstained on the empty Klingon cell. The second table reuses the fresh cases after diagnosis and adds the known NIST case. It measures model work over frozen inputs and excludes browser capture and Luna. Cost uses reported Decider input tokens. [Perplexity pricing](https://docs.perplexity.ai/docs/getting-started/pricing#decisions-api-pricing)
 
@@ -145,12 +147,12 @@ Archive `runs/plan-validation/table-binding-20261115T060542Z/` includes browser 
 
 Six fresh pages and three controls ran twice per arm through the public SDK. The candidate uses the table path only for flat, required scalar schemas on an unscoped text extraction. It reads bounded HTML tables in one browser batch and requires a lexical anchor in both a row and a column for every field. Ineligible requests use the current mapper. Once the table arm requests a decision, a missing or invalid selected cell sends the request to Luna. Locate runs only on the selected cell when the original value cannot satisfy the schema.
 
-| Population | Approach | Passed | Wrong direct accepts | Luna fallbacks | p50 / p95 | Cost per 1,000 |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| All runs | Current SDK | 14/18 | 4 | 4 | 0.94 / 8.54 s | $1.874 |
-| All runs | Table-cell SDK | 16/18 | 2 | 4 | 0.77 / 12.81 s | $1.870 |
-| Same tasks that routed to tables | Current SDK | 10/12 | 2 | 2 | 0.93 / 4.49 s | $0.0566 |
-| Same tasks that routed to tables | Table-cell SDK | 12/12 | 0 | 2 | 0.64 / 3.80 s | $0.0297 |
+| Population                       | Approach       | Passed | Wrong direct accepts | Luna fallbacks |      p50 / p95 | Cost per 1,000 |
+| -------------------------------- | -------------- | -----: | -------------------: | -------------: | -------------: | -------------: |
+| All runs                         | Current SDK    |  14/18 |                    4 |              4 |  0.94 / 8.54 s |         $1.874 |
+| All runs                         | Table-cell SDK |  16/18 |                    2 |              4 | 0.77 / 12.81 s |         $1.870 |
+| Same tasks that routed to tables | Current SDK    |  10/12 |                    2 |              2 |  0.93 / 4.49 s |        $0.0566 |
+| Same tasks that routed to tables | Table-cell SDK |  12/12 |                    0 |              2 |  0.64 / 3.80 s |        $0.0297 |
 
 The candidate used the table path on all 12 table-backed runs and the mapper on all six prose or mixed runs. PostgreSQL, IANA, Python's array table, and the competing-tables control passed directly in both builds. The table path normalized PostgreSQL's byte values, sent the empty cell to Luna, and recovered the compound code directly with one cell-scoped Locate request. Both builds still returned the wrong CSS viewport unit on the prose task. The mixed datetime page used Luna in both arms and dominated full-set cost and p95. The p95 is the slowest run at these sample sizes.
 
@@ -338,13 +340,13 @@ The exact-copy live results, replay overlay, DOM observations, and probe scripts
 
 The opt-in experiment reads at most 32 main-frame table cells in one browser batch. Each cell must match a snapshot XPath and contain a single visible code element whose rendered text matches the entire cell. It substitutes the rendered string only when both strings match after ignoring ordinary spaces. Scoped, ignored-locator, and screenshot extraction do not use this reader. Both Decider mapping and its Luna fallback see the resulting outline.
 
-| Live SDK case                 | Current cascade | With DOM reader | With DOM reader path |
-| ----------------------------- | --------------- | --------------- | -------------------- |
-| GitHub repository qualifiers  | 0/3             | 3/3             | Luna fallback        |
+| Live SDK case                  | Current cascade | With DOM reader | With DOM reader path |
+| ------------------------------ | --------------- | --------------- | -------------------- |
+| GitHub repository qualifiers   | 0/3             | 3/3             | Luna fallback        |
 | Intentional spaces in commands | 3/3             | 3/3             | Decider direct       |
-| SQLite function names         | 3/3             | 3/3             | Decider direct       |
-| Separate tables               | 3/3             | 3/3             | Luna fallback        |
-| Total                         | 9/12            | 12/12           | 6 direct, 6 fallback |
+| SQLite function names          | 3/3             | 3/3             | Decider direct       |
+| Separate tables                | 3/3             | 3/3             | Luna fallback        |
+| Total                          | 9/12            | 12/12           | 6 direct, 6 fallback |
 
 The GitHub reader inspected 24 cells and corrected two in 3–5 ms per run on the final build. Decider still disagreed on the group all three times. Both arms used six Luna fallbacks and 16,212 input / 81 output Decider tokens. Luna used 79,309 input / 2,718 output tokens on baseline and 79,357 / 1,853 with the final reader. This run measures exactness on known cases and controls. Sample size and Luna output variance limit latency and cost comparisons.
 
@@ -354,11 +356,11 @@ The benchmark archive is `runs/plan-validation/dom-code-20261115T053007Z/`. It c
 
 ## Active extraction paths
 
-| Kept | Archived |
-| --- | --- |
-| Current Decider mapper, dual list gate, scalar Locate check and one Luna fallback | List retry and source-coverage runtime arms |
-| Table-cell choice and cell-scoped Locate in benchmark SDK builds | Flat-page Locate-first and required-only scalar routing |
-| Exact callable-identifier copying and the frozen regression tasks | Rendered code-cell overlay and the separate table row and column check |
+| Kept                                                                              | Archived                                                               |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Current Decider mapper, dual list gate, scalar Locate check and one Luna fallback | List retry and source-coverage runtime arms                            |
+| Table-cell choice and cell-scoped Locate in benchmark SDK builds                  | Flat-page Locate-first and required-only scalar routing                |
+| Exact callable-identifier copying and the frozen regression tasks                 | Rendered code-cell overlay and the separate table row and column check |
 
 The frozen table probe now calls the SDK candidate and the current mapper. Earlier probes, graders and raw results remain in their original archives. To reproduce retired implementations, apply `pre-cleanup.patch` from `runs/plan-validation/extraction-cleanup-20261115T062818Z/` to its recorded base, `55d26094a`. That patch includes the uncommitted benchmark sources at the time of cleanup.
 
@@ -372,18 +374,18 @@ The candidate partitions flat required fields by table evidence. It runs the tab
 
 Three fresh page tasks, the known Python datetime case and three synthetic controls ran twice per arm. All 42 runs passed. Times are extraction time after navigation and include snapshot capture. Cost uses reported tokens for both providers.
 
-| Approach | Passed | Wrong direct accepts | Luna fallbacks | p50 / p95 | Cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Current SDK | 14/14 | 0 | 10 | 3.98 / 8.38 s | $3.213 |
-| All-or-nothing table routing | 14/14 | 0 | 8 | 3.44 / 9.49 s | $3.207 |
-| Mixed-field routing | 14/14 | 0 | 6 | 2.53 / 8.66 s | $0.896 |
+| Approach                     | Passed | Wrong direct accepts | Luna fallbacks |     p50 / p95 | Cost per 1,000 |
+| ---------------------------- | -----: | -------------------: | -------------: | ------------: | -------------: |
+| Current SDK                  |  14/14 |                    0 |             10 | 3.98 / 8.38 s |         $3.213 |
+| All-or-nothing table routing |  14/14 |                    0 |              8 | 3.44 / 9.49 s |         $3.207 |
+| Mixed-field routing          |  14/14 |                    0 |              6 | 2.53 / 8.66 s |         $0.896 |
 
 The split recovered both Python datetime runs directly. On each run the baselines sent 161,572 input tokens to Luna. That previously known task accounts for the aggregate savings. Excluding it, estimated cost per 1,000 was $1.025 for the current SDK, $1.005 for all-or-nothing table routing, and $1.034 for mixed routing. MDN rounding still needed Luna for the prose field. Narrowing its output schema reduced Luna input from 54,501 to 54,469 tokens per run because the snapshot was the same.
 
 | Provider input tokens across the 14 runs | Current SDK | Table routing | Mixed routing |
-| --- | ---: | ---: | ---: |
-| Decider | 37,790 | 36,796 | 28,338 |
-| Luna | 436,236 | 434,932 | 111,668 |
+| ---------------------------------------- | ----------: | ------------: | ------------: |
+| Decider                                  |      37,790 |        36,796 |        28,338 |
+| Luna                                     |     436,236 |       434,932 |       111,668 |
 
 All six mixed-route fallbacks requested only the unresolved fields. The p95 is the slowest run in each arm at this sample size. The mixed p95 was higher than the current SDK's and lower than the table arm's. Keep mixed routing benchmark-only. A fresh set should test whether it avoids expensive fallbacks on other pages and whether retained field values stay correct when Luna fills the rest.
 
@@ -395,11 +397,11 @@ The candidate tries Luna on the mapper's fact sheet when at least one mixed bran
 
 Three fresh pages, the known MDN rounding page, and three synthetic controls ran twice per arm. All 42 SDK runs passed. The follow-up used the same tasks after inspecting initial failures. Timing includes snapshot capture and excludes navigation. Cost includes accepted, rejected, and full-page calls using provider-reported token counts.
 
-| Approach | Passed | Bounded accepts | Full-page fallbacks | p50 / p95 | Cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Full snapshot | 14/14 | — | 14 | 6.51 / 8.29 s | $1.712 |
-| Bounded, strict quote | 14/14 | 5 | 9 | 6.73 / 12.19 s | $0.984 |
-| Bounded, verbatim supporting phrase | 14/14 | 7 | 7 | 4.74 / 11.21 s | $0.339 |
+| Approach                            | Passed | Bounded accepts | Full-page fallbacks |      p50 / p95 | Cost per 1,000 |
+| ----------------------------------- | -----: | --------------: | ------------------: | -------------: | -------------: |
+| Full snapshot                       |  14/14 |               — |                  14 |  6.51 / 8.29 s |         $1.712 |
+| Bounded, strict quote               |  14/14 |               5 |                   9 | 6.73 / 12.19 s |         $0.984 |
+| Bounded, verbatim supporting phrase |  14/14 |               7 |                   7 | 4.74 / 11.21 s |         $0.339 |
 
 The follow-up billed 33,055 Luna input tokens versus 220,016 for full snapshots, including retries. Reported cached input was 8,024 versus 8,644. Python JSON and MDN rounding used the bounded answer in both rounds. In PostgreSQL's binary-type task, Luna quoted words that did not occur together in the evidence, so the full snapshot answered both runs. The p95 is the slowest run in each arm at these sample sizes.
 
@@ -413,10 +415,10 @@ Archive `runs/plan-validation/bounded-luna-20261115T101516Z/` contains both cand
 
 The candidate tried bounded evidence only after mixed routing returned unresolved fields on a snapshot of at least 100,000 characters. Three fresh documentation pages, three large synthetic controls, and a known small-page control ran twice per arm. Both arms passed every run.
 
-| Mixed fallback approach | Passed | Bounded accepts / attempts | Full-page calls | p50 / p95 | Reported cost per 1,000 | Uncached cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Full snapshot | 14/14 | — | 12 | 6.43 / 9.56 s | $2.781 | $3.297 |
-| Bounded on large snapshots | 14/14 | 2/10 | 10 | 7.75 / 15.40 s | $1.874 | $2.927 |
+| Mixed fallback approach    | Passed | Bounded accepts / attempts | Full-page calls |      p50 / p95 | Reported cost per 1,000 | Uncached cost per 1,000 |
+| -------------------------- | -----: | -------------------------: | --------------: | -------------: | ----------------------: | ----------------------: |
+| Full snapshot              |  14/14 |                          — |              12 |  6.43 / 9.56 s |                  $2.781 |                  $3.297 |
+| Bounded on large snapshots |  14/14 |                       2/10 |              10 | 7.75 / 15.40 s |                  $1.874 |                  $2.927 |
 
 Both bounded accepts came from PostgreSQL's mathematical-functions page. The small-page control skipped both bounded attempts. The other eight bounded calls retried on the full snapshot. All retries recovered the correct result. The wrong-section control's shortlist contained the retired identifier `ORCHID-105` and omitted the current `ORCHID-733`. Luna abstained on that shortlist in both runs. The normalization control included the displayed date and required a full-page call for the ISO value.
 
@@ -430,20 +432,20 @@ Keep the size gate benchmark-only. Test a coverage gate and the numeric quote ch
 
 The SQLite replay tested retaining the signature and accepting a numeric assignment quote independently. Each evidence variant ran twice. Both quote validators checked the same model replies for that evidence variant.
 
-| SQLite replay | Bare-number check | Assignment-aware check |
-| --- | ---: | ---: |
-| Existing shortlist | 0/2 | 0/2 |
-| Shortlist with the source signature | 0/2 | 2/2 |
+| SQLite replay                       | Bare-number check | Assignment-aware check |
+| ----------------------------------- | ----------------: | ---------------------: |
+| Existing shortlist                  |               0/2 |                    0/2 |
+| Shortlist with the source signature |               0/2 |                    2/2 |
 
 The missing signature caused Luna to abstain on `timeout`. Retaining it produced `timeout=5.0` and `cached_statements=128` in both rounds. Both quotes occurred verbatim. The bare-number validator rejected them.
 
 The live candidates require a unique signature with a matching numeric assignment for every unresolved field on a large snapshot. The follow-up requires explicit callable and default intent in the field description. Nested assignments and conflicting signatures cannot supply a result. We compared asking Luna to read the identified signature with copying the matched literal in code.
 
-| Mixed fallback approach | Passed | Wrong signature accepts | Full-page calls | p50 / p95 | Uncached cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Full snapshot | 18/18 | — | 10 | 6.40 / 11.10 s | $3.467 |
-| Bounded Luna on matching signatures | 18/18 | 0 | 6 | 2.71 / 8.00 s | $1.978 |
-| Direct copy of matching defaults | 18/18 | 0 | 6 | 1.09 / 9.68 s | $1.961 |
+| Mixed fallback approach             | Passed | Wrong signature accepts | Full-page calls |      p50 / p95 | Uncached cost per 1,000 |
+| ----------------------------------- | -----: | ----------------------: | --------------: | -------------: | ----------------------: |
+| Full snapshot                       |  18/18 |                       — |              10 | 6.40 / 11.10 s |                  $3.467 |
+| Bounded Luna on matching signatures |  18/18 |                       0 |               6 |  2.71 / 8.00 s |                  $1.978 |
+| Direct copy of matching defaults    |  18/18 |                       0 |               6 |  1.09 / 9.68 s |                  $1.961 |
 
 Nine live tasks ran twice. Both candidates resolved four runs, two on the known SQLite page and two on a new clipped-signature fixture. On those four runs, the median was 8.61 s for full-page fallback, 3.52 s for bounded Luna, and 1.04 s for direct copy. Both candidates bypassed the clipped overload control and the full snapshot selected the current reference in both rounds. The fresh `re` and `codecs` mixed cases already passed through the mapper. A separate frozen check copied the exact defaults for `re.split`, `codecs.open`, and `statistics.quantiles` without a model call.
 
@@ -459,12 +461,12 @@ Compress the text for the existing Luna fallback after Decider routes. The forma
 
 The frozen set has 16 newly captured pages, four each for pricing, catalogs, API references, and prose. The [task definitions](../compactPageTasks.ts) record the exact graders. The archived first probe used the real extract service and model endpoints with the browser snapshots fixed. Extract timings therefore exclude navigation and snapshot capture. Each cascade ran twice per page. Each direct Luna arm ran once per page.
 
-| Arm | Passed | Luna fallbacks | Wrong direct accepts | p50 / p95 | Luna input tokens | Uncached cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Luna, raw | 14/16 | — | — | 4.30 / 10.16 s | 248,902 | $1.645 |
-| Luna, compact | 15/16 | — | — | 4.28 / 18.28 s | 137,214 | $0.959 |
-| Decider + Luna, raw | 30/32 | 18 | 0 | 3.29 / 9.19 s | 312,270 | $1.116 |
-| Decider + Luna, compact | 31/32 | 18 | 0 | 3.28 / 8.07 s | 174,205 | $0.681 |
+| Arm                     | Passed | Luna fallbacks | Wrong direct accepts |      p50 / p95 | Luna input tokens | Uncached cost per 1,000 |
+| ----------------------- | -----: | -------------: | -------------------: | -------------: | ----------------: | ----------------------: |
+| Luna, raw               |  14/16 |              — |                    — | 4.30 / 10.16 s |           248,902 |                  $1.645 |
+| Luna, compact           |  15/16 |              — |                    — | 4.28 / 18.28 s |           137,214 |                  $0.959 |
+| Decider + Luna, raw     |  30/32 |             18 |                    0 |  3.29 / 9.19 s |           312,270 |                  $1.116 |
+| Decider + Luna, compact |  31/32 |             18 |                    0 |  3.28 / 8.07 s |           174,205 |                  $0.681 |
 
 Both cascade arms routed the same 18 cases and used the same 64 decision calls, 110,424 decision input tokens, and 36 Luna calls. The matched fallback subset passed 16/18 raw and 17/18 compact. Its p50 was 4.69 versus 4.77 s, p95 was 13.76 versus 23.37 s, and uncached cost per 1,000 was $1.915 versus $1.141. Removing the largest page, Pathlib, still leaves a 30% uncached cost reduction across the cascade. The only wrong cascade result was `resolve` instead of `Path.resolve`. Raw Luna also omitted the URLs on one books task.
 
@@ -480,21 +482,21 @@ The extraction model returns a schema-validated object. A second, sequential cal
 
 The archived completion probe reused the 16 frozen compaction pages, ran each arm three times, rotated arm order within each case and recorded time and reported tokens for extraction and completion separately. The direct Luna arms used raw AX input, while the cascade had the same Decider routes and compact Luna input in both arms. Replay times exclude browser capture. The separate fixed-output check compared Luna and Decider on 16 cases twice each. It tested completeness from the instruction and returned values, including missing rows, missing links, optional absence, and explicit zero.
 
-| Extraction path | Passed | p50 / p95 | Uncached cost per 1,000 | Cost with reported cache per 1,000 |
-| --- | ---: | ---: | ---: | ---: |
-| Luna, existing completion | 44/48 | 4.19 / 9.35 s | $1.651 | $0.274 |
-| Luna, one call | 44/48 | 1.73 / 2.81 s | $1.559 | $0.183 |
-| Decider + compact Luna, existing completion | 45/48 | 3.91 / 9.84 s | $0.673 | $0.196 |
-| Decider + compact Luna, one Luna call | 45/48 | 1.98 / 3.61 s | $0.618 | $0.142 |
+| Extraction path                             | Passed |     p50 / p95 | Uncached cost per 1,000 | Cost with reported cache per 1,000 |
+| ------------------------------------------- | -----: | ------------: | ----------------------: | ---------------------------------: |
+| Luna, existing completion                   |  44/48 | 4.19 / 9.35 s |                  $1.651 |                             $0.274 |
+| Luna, one call                              |  44/48 | 1.73 / 2.81 s |                  $1.559 |                             $0.183 |
+| Decider + compact Luna, existing completion |  45/48 | 3.91 / 9.84 s |                  $0.673 |                             $0.196 |
+| Decider + compact Luna, one Luna call       |  45/48 | 1.98 / 3.61 s |                  $0.618 |                             $0.142 |
 
 Both cascade arms accepted 21 cases directly with zero wrong direct accepts and fell back on the same 27. On those matched fallbacks, cascade p95 dropped from 10.34 to 4.22 s. Single-call Luna ran those same cases at 2.74 s p95 and passed 23/27 versus 24/27 in both cascade arms. Among the six repeated book and Homebrew link tasks, removing completion cut cascade median time from 9.64 to 3.36 s. The old completion call alone took 6.37 s median on those cases.
 
 Provider-reported cache reads covered almost all Luna extraction input tokens. The bottleneck measures observed replay latency with a warm provider cache. The uncached cost column prices all reported input tokens at uncached rates. The best cascade cost 60% less at uncached prices than single-call Luna, while its workload p95 was 29% higher and its matched-fallback p95 was 54% higher. Price and latency comparisons on fresh live pages are still pending.
 
-| Fixed-output completion judge | Correct | False complete | p50 / p95 | Uncached cost per 1,000 |
-| --- | ---: | ---: | ---: | ---: |
-| Luna | 28/32 | 4 | 3.52 / 6.12 s | $0.0983 |
-| Decider | 32/32 | 0 | 0.44 / 0.75 s | $0.0025 |
+| Fixed-output completion judge | Correct | False complete |     p50 / p95 | Uncached cost per 1,000 |
+| ----------------------------- | ------: | -------------: | ------------: | ----------------------: |
+| Luna                          |   28/32 |              4 | 3.52 / 6.12 s |                 $0.0983 |
+| Decider                       |   32/32 |              0 | 0.44 / 0.75 s |                 $0.0025 |
 
 Luna marked an empty link complete twice. It also marked an empty extraction and a response with unwanted alternate names complete once each. Decider matched the expected verdict on every trial. These fixed outputs test whether the answer meets explicit requirements. They cannot measure source fidelity because neither judge receives the page. A completion verdict can stay an opt-in diagnostic. Remove the mandatory metadata call from the experimental comparison and use single-call Luna as the latency baseline.
 
@@ -508,11 +510,11 @@ Ordinary extraction and the `map` fallback now use one structured generation cal
 
 The public SDK comparison used three local controls and three live reference or pricing pages, two rounds per path. Timings include snapshot capture and exclude navigation. Luna reported no cache reads. The p95 equals the slowest run at this sample size.
 
-| Live path | Passed | p50 / p95 | Luna calls |
-| --- | ---: | ---: | ---: |
-| Previous Luna | 10/12 | 4.24 / 5.13 s | 24 |
-| Single-call Luna | 10/12 | 1.74 / 2.37 s | 12 |
-| Decider with raw Luna fallback | 10/12 | 2.00 / 3.14 s | 6 |
+| Live path                      | Passed |     p50 / p95 | Luna calls |
+| ------------------------------ | -----: | ------------: | ---------: |
+| Previous Luna                  |  10/12 | 4.24 / 5.13 s |         24 |
+| Single-call Luna               |  10/12 | 1.74 / 2.37 s |         12 |
+| Decider with raw Luna fallback |  10/12 | 2.00 / 3.14 s |          6 |
 
 Every arm returned uppercase Neon plan names where the existing grader expected title case. The grader stayed fixed. This live run covers the removal in the SDK. The wider fresh-page comparison remains on the roadmap.
 
@@ -520,10 +522,10 @@ Archive `runs/plan-validation/single-call-cleanup-20261115T112309Z/` contains bo
 
 The active probe finished 144 runs on the 16 frozen pages. Each path ran three times per page. All direct accepts passed. Provider cache covered over 99% of reported Luna input in all three arms.
 
-| Single-call replay path | Passed | p50 / p95 | Uncached cost per 1,000 | Cost with reported cache per 1,000 |
-| --- | ---: | ---: | ---: | ---: |
-| Luna, raw | 44/48 | 2.02 / 3.13 s | $1.561 | $0.184 |
-| Luna, compact | 46/48 | 1.73 / 3.24 s | $0.863 | $0.114 |
-| Decider + Luna, compact fallback | 45/48 | 2.21 / 4.97 s | $0.618 | $0.142 |
+| Single-call replay path          | Passed |     p50 / p95 | Uncached cost per 1,000 | Cost with reported cache per 1,000 |
+| -------------------------------- | -----: | ------------: | ----------------------: | ---------------------------------: |
+| Luna, raw                        |  44/48 | 2.02 / 3.13 s |                  $1.561 |                             $0.184 |
+| Luna, compact                    |  46/48 | 1.73 / 3.24 s |                  $0.863 |                             $0.114 |
+| Decider + Luna, compact fallback |  45/48 | 2.21 / 4.97 s |                  $0.618 |                             $0.142 |
 
 Compaction alone cut uncached Luna cost by 45%. Adding Decider saved a further 28% at uncached rates and cost more at the cache hit rates observed here. Compact Luna is the next live comparator for the cascade. See `compact-replay/` in the same archive.

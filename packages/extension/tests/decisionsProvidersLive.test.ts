@@ -21,7 +21,12 @@ const cloudflareToken = env.CLOUDFLARE_AUTH_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
 const LIVE = env.DECISIONS_LIVE === "1";
 
 const PROVIDERS: Array<{ name: string; config: DecisionModelConfig | undefined }> = [
-  { name: "typesafe", config: env.TYPESAFE_API_KEY ? { apiKey: env.TYPESAFE_API_KEY } : undefined },
+  {
+    name: "typesafe",
+    config: env.TYPESAFE_API_KEY
+      ? { provider: "typesafe", apiKey: env.TYPESAFE_API_KEY }
+      : undefined,
+  },
   {
     name: "cloudflare",
     config:
@@ -98,7 +103,10 @@ describe.skipIf(!LIVE)("live decision providers", () => {
         expect(target.choice).toBe("0-7 / b");
         expect(
           Object.keys(target.probabilities).every(
-            (id) => id in QUESTIONS["target:pointer/0"]!.criteria!,
+            (id) =>
+              id in
+              (QUESTIONS["target:pointer/0"] as Extract<DecisionQuestion, { type: "choice" }>)
+                .criteria,
           ),
         ).toBe(true);
         expect(isClick.noul).toBeGreaterThan(0.5);

@@ -1,8 +1,6 @@
-import {
-  describeCandidate,
-  parseOutline,
-  type OutlineNode,
-} from "../../extension/services/decisions/tree.js";
+import type { OutlineNode } from "../../extension/services/decisions/outline.js";
+import { baselineModule } from "./system-one/baseline.js";
+const { describeCandidate, parseOutline } = await baselineModule("services/decisions/tree");
 
 type EvidenceRecord = { title: string; lines: string[]; sourceIds: string[] };
 

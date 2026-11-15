@@ -1,5 +1,7 @@
 # Evaluation protocol
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Rules for measuring System One extraction so numbers stay honest.
 
 ## Product shape under test
@@ -12,11 +14,11 @@ Do not optimize for multi-model agreement as the product default. Agreement arms
 
 ## Frozen replay vs live
 
-| Kind | What it measures | What it does not |
-| --- | --- | --- |
+| Kind                                                                | What it measures                              | What it does not                                     |
+| ------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------- |
 | **Replay** (`replay.ts` on `vendor-repos/system-one-corpus/*.json`) | Mapping quality on a fixed accessibility tree | Browser latency, navigation, bot walls, layout shift |
-| **Live fixtures** (`live.ts`) | Public SDK + extension path, round trips | Real-page size or ranking |
-| **Live URLs** (`live.ts` with `LIVE_TASKS`) | End-to-end wall clock including snapshot | Needs its own small fixed URL list |
+| **Live fixtures** (`live.ts`)                                       | Public SDK + extension path, round trips      | Real-page size or ranking                            |
+| **Live URLs** (`live.ts` with `LIVE_TASKS`)                         | End-to-end wall clock including snapshot      | Needs its own small fixed URL list                   |
 
 Report **which** kind every number came from.
 
@@ -31,14 +33,14 @@ Report **which** kind every number came from.
 
 Status of existing sets:
 
-| Set | Role now |
-| --- | --- |
-| `corpus.ts` (dev) | Tuning / regression |
-| `heldout.ts` (held1) | Seen; regression |
-| `heldout2.ts` (held2) | Seen; regression |
-| `heldout3.ts` (held3) | Seen; informed data-view fixes; regression |
-| `heldout4.ts` (held4) | Informed nested-section / absent-value work; **regression only** |
-| `heldout5.ts` | Six site-disjoint tasks with frozen graders. Older held5 logs refer to a separate experiment |
+| Set                   | Role now                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| `corpus.ts` (dev)     | Tuning / regression                                                                          |
+| `heldout.ts` (held1)  | Seen; regression                                                                             |
+| `heldout2.ts` (held2) | Seen; regression                                                                             |
+| `heldout3.ts` (held3) | Seen; informed data-view fixes; regression                                                   |
+| `heldout4.ts` (held4) | Informed nested-section / absent-value work; **regression only**                             |
+| `heldout5.ts`         | Six site-disjoint tasks with frozen graders. Older held5 logs refer to a separate experiment |
 
 ## Metrics to report
 

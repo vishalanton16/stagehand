@@ -1,5 +1,7 @@
 # Next steps
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 The SDK keeps Decider's current mapper and one Luna fallback. The table-cell route remains available in benchmark builds. See [INDEX.md](./INDEX.md) for completed work and [EVALUATION.md](./EVALUATION.md) for measurement rules.
 
 ## Current experiment order

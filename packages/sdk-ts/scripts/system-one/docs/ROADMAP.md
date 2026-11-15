@@ -1,5 +1,7 @@
 # Roadmap
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Phased path from the current experiment to something Stagehand can ship. Each phase has an exit criterion. Engineering detail lives in [NEXT_STEPS.md](./NEXT_STEPS.md); measurement rules in [EVALUATION.md](./EVALUATION.md).
 
 ## Current decisions

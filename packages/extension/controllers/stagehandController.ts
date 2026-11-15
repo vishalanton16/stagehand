@@ -17,7 +17,7 @@ import * as actService from "../services/actService.js";
 import * as cacheService from "../services/cacheService.js";
 import * as extractService from "../services/extractService.js";
 import { buildGatewayContext } from "../llm/gatewayClient.js";
-import type { DecisionsConfig } from "../services/decisions/pipeline.js";
+import type { DecisionsConfig } from "../services/decisions/config.js";
 import * as observeService from "../services/observeService.js";
 
 export type StagehandControllerOptions = {
@@ -62,30 +62,29 @@ export function createStagehandController(
     return { closed: true as const };
   }
 
-  /**
-   * `stagehand.act()` and friends never touch the decision model; only the
-   * `stagehand.experimentalDecisions.*` methods do. With a config present the
-   * plain methods still log their per-call timing, so the two can be compared.
-   */
   type Via = "llm" | "decisions";
 
-  function decisionsFor(via: Via, operation: string): DecisionsConfig | undefined {
+  function decisionsFor(
+    via: Via,
+    operation: string,
+  ): (DecisionsConfig & { observe?: boolean }) | undefined {
     const state = runtime.state.getState();
     const configured =
       state.status === "initialized" ? state.initParams.experimentalDecisions : undefined;
-    if (via === "llm") return configured ? { ...configured, enabled: false } : undefined;
+    if (via === "llm") return undefined;
     if (!configured) {
       throw new Error(
         `stagehand.experimentalDecisions.${operation}() needs experimentalDecisions to be configured when Stagehand is created`,
       );
     }
-    return { ...configured, enabled: true, observe: true, extract: configured.extract ?? "pick" };
+    return operation === "observe" ? { ...configured, observe: true } : configured;
   }
 
   async function act(params: StagehandActParams, context: HandlerContext, via: Via = "llm") {
     const operation = via === "llm" ? "stagehand.act" : "stagehand.experimental_decisions_act";
     return await runOperation(operation, context, async (logger) => {
       logger.debug(operation, {});
+
       const state = runtime.state.getState();
       if (state.status !== "initialized") {
         throw new Error("Stagehand must be initialized before acting");
@@ -96,7 +95,7 @@ export function createStagehandController(
         state.initParams,
         runtime.adapters.clientBrowserbaseRequest,
       );
-      if (!model && !gateway) {
+      if (!model && !gateway && via === "llm") {
         throw new Error("An LLM was not configured during Stagehand initialization");
       }
 
@@ -115,7 +114,6 @@ export function createStagehandController(
         ),
         gateway,
         decisions: decisionsFor(via, "act"),
-        openPageCount: () => runtime.requireBrowserSession().pages().length,
       });
       runtime.metrics.record("act", result.metadata.usage);
       return result;
@@ -173,6 +171,7 @@ export function createStagehandController(
       via === "llm" ? "stagehand.extract" : "stagehand.experimental_decisions_extract";
     return await runOperation(operation, context, async (logger) => {
       logger.debug(operation, {});
+
       const state = runtime.state.getState();
       if (state.status !== "initialized") {
         throw new Error("Stagehand must be initialized before extracting");
@@ -183,7 +182,7 @@ export function createStagehandController(
         state.initParams,
         runtime.adapters.clientBrowserbaseRequest,
       );
-      if (!model && !gateway) {
+      if (!model && !gateway && via === "llm") {
         throw new Error("An LLM was not configured during Stagehand initialization");
       }
 

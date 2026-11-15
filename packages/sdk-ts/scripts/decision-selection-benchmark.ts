@@ -6,18 +6,15 @@ import {
   type DecisionQuestion,
   type JsonValue,
 } from "../../extension/services/decisions/client.js";
-import { pickCandidate } from "../../extension/services/decisions/pick.js";
-import {
-  buildView,
-  describeCandidate,
-  parseOutline,
-  scoreCandidates,
-} from "../../extension/services/decisions/tree.js";
+import { baselineModule } from "./system-one/baseline.js";
+const { pickCandidate } = await baselineModule("services/decisions/pick");
+const { buildView, describeCandidate, parseOutline, scoreCandidates } =
+  await baselineModule("services/decisions/tree");
 import { localBrowser, Stagehand } from "../src/index.js";
 
 const env = process.env;
 const configs: Record<string, DecisionModelConfig> = {
-  jev: { apiKey: env.TYPESAFE_API_KEY! },
+  jev: { provider: "typesafe", apiKey: env.TYPESAFE_API_KEY!, model: "jev-1.14.0" },
   clef: {
     provider: "cloudflare",
     apiKey: env.CLOUDFLARE_AUTH_TOKEN!,

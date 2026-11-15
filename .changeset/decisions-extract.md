@@ -4,4 +4,4 @@
 "@browserbasehq/stagehand-python": patch
 ---
 
-experimental decisions path: opt-in `extract` modes — `"judge"` replaces the completion LLM call, `"pick"` lets the decision model choose the elements whose text is copied into the schema
+Map extraction fields to page records and copy values with evidence checks and LLM fallback. Remove prototype extraction modes and the ordinary LLM extraction completion call, which previously affected only logging.

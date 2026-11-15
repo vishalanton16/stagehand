@@ -4,4 +4,4 @@
 "@browserbasehq/stagehand-python": patch
 ---
 
-Decision models are now used through an explicit namespace: `stagehand.experimentalDecisions.act()`, `.observe()` and `.extract()` (`stagehand.experimental_decisions` in Python). The `experimentalDecisions` config is a public create option in TypeScript and Python; `stagehand.act()`, `observe()` and `extract()` never use the decision model, and the `STAGEHAND_EXPERIMENTAL_DECISIONS` environment bridge is gone.
+Expose experimental decisions through the explicit TypeScript and Python namespaces. Configuration contains provider credentials and an optional model; ordinary Stagehand methods remain isolated. Experimental observation retains the existing decision-model implementation pending separate evaluation.

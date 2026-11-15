@@ -12,7 +12,19 @@ export async function guardActionTarget(
 ): Promise<string | undefined> {
   const method = action.method ?? "";
   if (
-    !["click", "doubleClick", "hover", "fill", "type", "selectOptionFromDropdown"].includes(method)
+    ![
+      "click",
+      "doubleClick",
+      "hover",
+      "fill",
+      "type",
+      "selectOptionFromDropdown",
+      "scrollTo",
+      "nextChunk",
+      "prevChunk",
+      "press",
+      "dragAndDrop",
+    ].includes(method)
   )
     return;
   try {
@@ -51,6 +63,7 @@ export async function guardActionTarget(
 
 function actionEligibility(this: Element, method: string): string {
   if (!this.isConnected) return "target_detached";
+  if (["scrollTo", "nextChunk", "prevChunk", "press"].includes(method)) return "ok";
   if (this.matches(":disabled") || this.closest('[inert],[aria-disabled="true"]'))
     return "target_disabled";
   const rect = this.getBoundingClientRect();

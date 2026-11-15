@@ -1,5 +1,7 @@
 # Act provider research (Jev, Clef/Clairic, Decider/Locate)
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Access date: **2026-11-15**. Research only; no new experiments were run for this document. Extraction results already live in [PROVIDER_RESEARCH.md](./PROVIDER_RESEARCH.md) and [DECISION_PRIMITIVES.md](./DECISION_PRIMITIVES.md). This note targets **browser `act()` / smart-selector** use of the same providers.
 
 Legend: **Fact** = stated in official docs or verified local contracts. **Marketing** = vendor claim without a Stagehand-reproducible contract. **Hypothesis** = architectural guess for Stagehand; falsifiable below. **Known (prior)** = already in local transcripts / System One docs; not rediscovered here.
@@ -15,8 +17,8 @@ Legend: **Fact** = stated in official docs or verified local contracts. **Market
 | [providers.ts](../../../../extension/services/decisions/providers.ts) | Wire adapters: TypeSafe `POST /v1/systemone`, Cloudflare Workers AI Clef, Perplexity `POST /v1/decisions`. Exposes only `choice` and `noul`. |
 | [client.ts](../../../../extension/services/decisions/client.ts)       | Timeout, 429/529 retry, circuit breaker, question-chunking by `maxQuestions`, id aliasing, answer validation.                                |
 | [tree.ts](../../../../extension/services/decisions/tree.ts)           | AX outline → role-filtered candidate views (`pointer`, `input`, `select`, …).                                                                |
-| [pick.ts](../../../../extension/services/decisions/pick.ts)           | Dual `best` + `strict` (with `none_match`), shard fan-out at 254 options / ~60k chars, prune-above-40.                                       |
-| [pipeline.ts](../../../../extension/services/decisions/pipeline.ts)   | Intent fan-out (family, fill_value, mouse_button, toggle, scroll_scope, key, tools) → family view → pick → args → execute → optional checks. |
+| [pick.ts](./CLEANUP_RESULTS.md#historical-source-and-evidence)        | Dual `best` + `strict` (with `none_match`), shard fan-out at 254 options / ~60k chars, prune-above-40.                                       |
+| [pipeline.ts](./CLEANUP_RESULTS.md#historical-source-and-evidence)    | Intent fan-out (family, fill_value, mouse_button, toggle, scroll_scope, key, tools) → family view → pick → args → execute → optional checks. |
 
 Local client knobs (code facts): TypeSafe `maxQuestions=1000`, Cloudflare `64`, Perplexity `128`; Cloudflare/Perplexity flatten structured instructions to text; TypeSafe keeps JSON. Default models: `jev-latest`, `clef`, `pplx-decider-latest`. Act default confidence `0.7`. Pick shards at `SHARD_SIZE=254` (255-option ceiling minus `none_match`).
 

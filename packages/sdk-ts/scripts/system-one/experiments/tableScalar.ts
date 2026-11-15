@@ -1,9 +1,13 @@
 import { z } from "zod/v4";
-import type { UnderstudyRuntimePage } from "../../runtime.js";
-import type { Progress } from "../../understudy/progress.js";
-import { decide, type DecisionModelConfig, type DecisionQuestion } from "./client.js";
+import type { UnderstudyRuntimePage } from "../../../../extension/runtime.js";
+import type { Progress } from "../../../../extension/understudy/progress.js";
+import {
+  decide,
+  type DecisionModelConfig,
+  type DecisionQuestion,
+} from "../../../../extension/services/decisions/client.js";
 import { extractWithDecider } from "./decider.js";
-import type { JsonSchema } from "./mapCopy.js";
+import type { JsonSchema } from "../../../../extension/services/decisions/mapCopy.js";
 import {
   shortlist,
   tableCells,

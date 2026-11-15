@@ -17,7 +17,9 @@ const [captureDir, dir] = process.argv.slice(2);
 if (!captureDir || !dir)
   throw new Error("Expected frozen capture directory and new result directory");
 mkdirSync(dir);
-const arms = (process.env.ACT_ARMS ?? "luna,tree,plans").split(",");
+const arms = (process.env.ACT_ARMS ?? "luna,plans").split(",");
+if (arms.includes("tree"))
+  throw new Error("The tree arm requires the archived baseline runner; see CLEANUP_RESULTS.md.");
 const rounds = Number(process.env.ACT_ROUNDS ?? 2);
 const decisionModel = process.env.ACT_MODEL ?? "pplx-decider-v1.3";
 const llmModel = process.env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna";
@@ -83,7 +85,6 @@ try {
             provider: "perplexity",
             apiKey: process.env.PERPLEXITY_API_KEY!,
             model: decisionModel,
-            act: arm === "plans" ? "plans" : "tree",
           },
           logging: {
             level: "info",

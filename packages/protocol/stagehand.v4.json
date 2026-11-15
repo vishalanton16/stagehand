@@ -1472,7 +1472,7 @@
       "type": "object",
       "properties": {
         "provider": {
-          "description": "Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider",
+          "description": "Decision-model provider: Perplexity Decider (default), TypeSafe Jev, or Cloudflare Clef",
           "type": "string",
           "enum": ["typesafe", "cloudflare", "perplexity"]
         },
@@ -1492,48 +1492,6 @@
           "description": "Cloudflare account id; required for provider \"cloudflare\"",
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{1,64}$"
-        },
-        "act": {
-          "description": "Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests",
-          "type": "string",
-          "enum": ["tree", "plans"]
-        },
-        "retry_no_effect": {
-          "type": "boolean"
-        },
-        "focus_fallback": {
-          "type": "boolean"
-        },
-        "cache_check": {
-          "type": "boolean"
-        },
-        "extract": {
-          "type": "string",
-          "enum": ["judge", "pick", "native", "map"]
-        },
-        "act_confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "verify": {
-          "type": "string",
-          "enum": ["off", "checks", "full"]
-        },
-        "llm_fallback": {
-          "type": "boolean"
-        },
-        "argument_llm": {
-          "type": "boolean"
-        },
-        "page_state": {
-          "type": "boolean"
-        },
-        "tools": {
-          "type": "boolean"
-        },
-        "target_readiness": {
-          "type": "boolean"
         }
       },
       "required": ["api_key"],

@@ -8,11 +8,9 @@ import { trace } from "@opentelemetry/api";
 import type { Action } from "@browserbasehq/stagehand-protocol/types";
 import { StagehandLogger } from "../../../../extension/logger.js";
 import * as inference from "../../../../extension/inference.js";
-import { pickCandidate } from "../../../../extension/services/decisions/pick.js";
-import {
-  runDecisionsAct,
-  type DecisionsActDeps,
-} from "../../../../extension/services/decisions/pipeline.js";
+import { baselineModule } from "../baseline.js";
+const { pickCandidate } = await baselineModule("services/decisions/pick");
+const { runDecisionsAct } = await baselineModule("services/decisions/pipeline");
 import {
   choiceAnswer,
   decide,
@@ -228,7 +226,7 @@ async function run({ label, snapshot }: (typeof jobs)[number], arm: string, roun
               actions: [candidate],
             };
           },
-        } as unknown as DecisionsActDeps;
+        };
         await runDecisionsAct(
           { ...config, llmFallback: false, argumentLlm: false, pageState: false },
           deps,

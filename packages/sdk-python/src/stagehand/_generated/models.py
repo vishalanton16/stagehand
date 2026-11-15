@@ -24,15 +24,6 @@ from stagehand._validation import (
 )
 
 
-class Act(StrEnum):
-    """
-    Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests
-    """
-
-    tree = "tree"
-    plans = "plans"
-
-
 class ActOptions(WireModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -627,7 +618,7 @@ class ExperimentalDecisionsConfig(WireModel):
         validate_by_name=True,
     )
     provider: Optional[Provider] = None
-    """Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider"""
+    """Decision-model provider: Perplexity Decider (default), TypeSafe Jev, or Cloudflare Clef"""
     api_key: Annotated[StrictStr, Field(min_length=1)]
     model: Annotated[Optional[StrictStr], Field(min_length=1)] = None
     api_url: Annotated[Optional[StrictStr], Field(pattern="^https:\\/\\/[^\\s?#]+$")] = (
@@ -637,19 +628,6 @@ class ExperimentalDecisionsConfig(WireModel):
         None
     )
     """Cloudflare account id; required for provider "cloudflare\""""
-    act: Optional[Act] = None
-    """Experimental act policy: tree keeps intent-then-target; plans chooses one complete click or literal fill action with target checks, falling back to the LLM for other requests"""
-    retry_no_effect: Optional[StrictBool] = None
-    focus_fallback: Optional[StrictBool] = None
-    cache_check: Optional[StrictBool] = None
-    extract: Optional[Extract] = None
-    act_confidence: Annotated[Optional[StrictFloat], Field(ge=0.0, le=1.0)] = None
-    verify: Optional[Verify] = None
-    llm_fallback: Optional[StrictBool] = None
-    argument_llm: Optional[StrictBool] = None
-    page_state: Optional[StrictBool] = None
-    tools: Optional[StrictBool] = None
-    target_readiness: Optional[StrictBool] = None
 
 
 class ExternalProxyConfig(WireModel):
@@ -662,13 +640,6 @@ class ExternalProxyConfig(WireModel):
     domain_pattern: Optional[StrictStr] = None
     username: Optional[StrictStr] = None
     password: Optional[StrictStr] = None
-
-
-class Extract(StrEnum):
-    judge = "judge"
-    pick = "pick"
-    native = "native"
-    map = "map"
 
 
 class ExtractOptions(WireModel):
@@ -2211,7 +2182,7 @@ class Polling(RootModel[StrictFloat]):
 
 class Provider(StrEnum):
     """
-    Decision-model provider: TypeSafe Jev (default), Cloudflare Clef, or Perplexity Decider
+    Decision-model provider: Perplexity Decider (default), TypeSafe Jev, or Cloudflare Clef
     """
 
     typesafe = "typesafe"
@@ -2549,12 +2520,6 @@ class VariableValue(RootModel[Union[VariablePrimitive, DescribedVariableValue]])
 
 class Variables(RootModel[dict[StrictStr, VariableValue]]):
     root: dict[StrictStr, VariableValue]
-
-
-class Verify(StrEnum):
-    off = "off"
-    checks = "checks"
-    full = "full"
 
 
 class WebMCPAnnotation(WireModel):

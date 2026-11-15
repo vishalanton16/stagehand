@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { prepareTableScalar } from "../services/decisions/tableScalar.js";
+import { prepareTableScalar } from "../../sdk-ts/scripts/system-one/experiments/tableScalar.js";
 
 const cell = (text: string) => ({ text, header: false, scope: "", rowspan: 1, colspan: 1 });
 const header = (text: string) => ({ ...cell(text), header: true, scope: "col" });

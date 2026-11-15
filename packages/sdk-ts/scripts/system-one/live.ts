@@ -215,7 +215,6 @@ try {
           provider: "perplexity",
           apiKey: process.env.PERPLEXITY_API_KEY!,
           model: decisionModel,
-          extract: "map",
         },
         logging: {
           level: "debug",

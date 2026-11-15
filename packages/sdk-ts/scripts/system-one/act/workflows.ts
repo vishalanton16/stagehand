@@ -40,7 +40,7 @@ writeFileSync(
     {
       kind: "live-workflow-regression",
       rounds: 2,
-      arms: ["luna", "tree", "plans"],
+      arms: ["luna", "plans"],
       cases,
       navigation:
         "Initial URL only. Every scored step uses the same natural-language act instruction across arms. No manual navigation or selectors replace failed steps.",
@@ -60,7 +60,7 @@ const browser = await localBrowser.launch({ headless: true });
 try {
   for (let round = 0; round < 2; round++)
     for (const scenario of cases) {
-      const arms = round % 2 ? ["plans", "tree", "luna"] : ["luna", "tree", "plans"];
+      const arms = round % 2 ? ["plans", "luna"] : ["luna", "plans"];
       for (const arm of arms) {
         const calls: object[] = [],
           decisions: object[] = [],
@@ -77,7 +77,6 @@ try {
             provider: "perplexity",
             apiKey: process.env.PERPLEXITY_API_KEY!,
             model: "pplx-decider-v1.3",
-            act: arm === "plans" ? "plans" : "tree",
           },
           logging: {
             level: "info",

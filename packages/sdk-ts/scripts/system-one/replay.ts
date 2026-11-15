@@ -16,13 +16,12 @@ import { z } from "zod/v4";
 import { StagehandExtractParamsSchema } from "@browserbasehq/stagehand-protocol/schemas";
 import { StagehandLogger } from "../../../extension/logger.js";
 import * as inference from "../../../extension/inference.js";
-import { extractWithClairic } from "../../../extension/services/decisions/clairic.js";
+import { extractWithClairic } from "./experiments/clairic.js";
 import type { DecisionModelConfig } from "../../../extension/services/decisions/client.js";
-import { extractWithDecider } from "../../../extension/services/decisions/decider.js";
-import {
-  runDecisionsExtract,
-  type JsonSchema,
-} from "../../../extension/services/decisions/extract.js";
+import { extractWithDecider } from "./experiments/decider.js";
+import type { JsonSchema } from "./mapCopy.js";
+import { baselineModule } from "./baseline.js";
+const { runDecisionsExtract } = await baselineModule("services/decisions/extract");
 import { parseOutline } from "../../../extension/services/decisions/tree.js";
 import { runWithProgress } from "../../../extension/understudy/progress.js";
 import { injectUrls, transformSchema } from "../../../extension/utils.js";
@@ -83,12 +82,12 @@ export const decisionConfigs = {
   decider: {
     provider: "perplexity",
     apiKey: env.PERPLEXITY_API_KEY!,
-    model: "pplx-decider-latest",
+    model: "pplx-decider-v1.3",
   },
   flash: {
     provider: "perplexity",
     apiKey: env.PERPLEXITY_API_KEY!,
-    model: "pplx-decider-flash-latest",
+    model: "pplx-decider-flash-v1.3",
   },
 } satisfies Record<string, DecisionModelConfig>;
 

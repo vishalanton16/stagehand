@@ -33,7 +33,7 @@ function setup() {
       })),
       screenshot: vi.fn(async () => new Uint8Array()),
     },
-    decisions: { provider: "typesafe" as const, apiKey: "test", extract: "map" as const },
+    decisions: { provider: "typesafe" as const, apiKey: "test" },
     model: { source: "client" as const },
     clientLLMGenerate: generate,
     logger: new StagehandLogger({ tracer: trace.getTracer("system-one-test") }, () => {}),
@@ -54,7 +54,7 @@ describe("System One extract service", () => {
     const result = await extract({ ...options, systemPrompt: "This is policy number 42." });
     expect(mapping.mapCopyExtract).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ instruction: options.params.instruction, askVerifier: false }),
+      expect.objectContaining({ instruction: options.params.instruction }),
     );
     expect(result.data).toEqual({ name: "Example", stars: 0 });
     expect(result.metadata.usage).toMatchObject({ inputTokens: 30, outputTokens: 2 });
@@ -101,87 +101,18 @@ describe("System One extract service", () => {
     expect(options.clientLLMGenerate).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back directly to the LLM for a missing selected table cell and keeps its usage", async () => {
-    const mapper = vi.spyOn(mapping, "mapCopyExtract");
+  it("requires LLM credentials only when the mapper needs fallback", async () => {
     const options = setup();
-    options.page.captureSnapshot.mockResolvedValue({
-      combinedTree: "[0-1] table",
-      combinedXpathMap: {},
-      combinedUrlMap: {},
+    const mapper = vi.spyOn(mapping, "mapCopyExtract").mockResolvedValue({
+      data: { name: "Example" },
+      trace: [],
+      verdict: { problems: [], agree: 0 },
     });
-    const cell = (text: string, header = false) => ({
-      text,
-      header,
-      scope: header ? "col" : "",
-      rowspan: 1,
-      colspan: 1,
-    });
-    const evaluate = vi.fn(async () => [
-      {
-        heading: "Directory",
-        caption: "",
-        rows: [
-          { section: "THEAD", cells: [cell("Team", true), cell("Name", true)] },
-          { section: "TBODY", cells: [cell("Orion"), cell("")] },
-        ],
-      },
-    ]);
-    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
-      if (typeof init?.body !== "string") throw new TypeError("Expected a JSON request body");
-      const { questions } = JSON.parse(init.body);
-      const criteria = questions.cell0.criteria as Record<string, string>;
-      const choice = Object.keys(criteria).find((key) =>
-        criteria[key]!.includes("| column Name | value (empty)"),
-      );
-      expect(choice).toBeDefined();
-      return Response.json({
-        answers: {
-          cell0: {
-            type: "choice",
-            choice,
-            confidence: 1,
-            probabilities: Object.fromEntries(
-              Object.keys(criteria).map((key) => [key, key === choice ? 1 : 0]),
-            ),
-          },
-        },
-        usage: { input_tokens: 60, output_tokens: 2 },
-      });
-    });
-    const result = await extract({
-      ...options,
-      params: {
-        ...options.params,
-        instruction: "Find the Name listed for the Orion team",
-        schema: z.json().parse(
-          z.toJSONSchema(
-            z.object({
-              name: z.string().describe("Name of the Orion team"),
-            }),
-          ),
-        ),
-      },
-      page: { ...options.page, evaluate },
-      decisions: { ...options.decisions, provider: "perplexity" },
-      tableCellExperiment: true,
-      clientLLMGenerate: async (params) => {
-        const result = await options.clientLLMGenerate(params);
-        return { ...result, structuredContent: { name: "Example" } };
-      },
-    });
-    expect(result.data).toEqual({ name: "Example" });
-    expect(result.metadata.usage).toMatchObject({ inputTokens: 70, outputTokens: 4 });
-    expect(evaluate).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(mapper).not.toHaveBeenCalled();
-  });
-
-  it("respects disabled fallback on provider failure", async () => {
-    vi.spyOn(mapping, "mapCopyExtract").mockRejectedValue(new Error("provider unavailable"));
-    const options = setup();
-    await expect(
-      extract({ ...options, decisions: { ...options.decisions, llmFallback: false } }),
-    ).rejects.toThrow("provider unavailable");
+    expect((await extract({ ...options, model: undefined })).data).toEqual({ name: "Example" });
+    mapper.mockRejectedValueOnce(new Error("unsupported schema"));
+    await expect(extract({ ...options, model: undefined })).rejects.toThrow(
+      "configured LLM model or Browserbase gateway for fallback",
+    );
     expect(options.clientLLMGenerate).not.toHaveBeenCalled();
   });
 

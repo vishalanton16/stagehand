@@ -3,7 +3,7 @@
  * aligned slots, and labelled facts. Stagehand builds it deterministically, so
  * a decision model only has to map schema fields onto slots or facts.
  */
-import { parseOutline, type OutlineNode } from "./tree.js";
+import { parseOutline, type OutlineNode } from "./outline.js";
 
 export type Slot = {
   key: string;

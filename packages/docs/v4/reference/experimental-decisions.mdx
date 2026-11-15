@@ -1,6 +1,6 @@
 ---
 title: "experimentalDecisions"
-description: "act(), observe(), and extract() resolved by a decision model"
+description: "Experimental decision models for actions and extraction, with LLM fallback"
 icon: "flask"
 ---
 
@@ -8,54 +8,52 @@ icon: "flask"
   Experimental. The surface, its configuration, and its behavior may change between releases.
 </Warning>
 
-A decision model answers small typed questions ("which of these options", "yes or no") with
-probabilities. It does not generate text, and it answers in a few hundred milliseconds. The
-`experimentalDecisions` namespace runs `act()`, `observe()`, and `extract()` through such questions
-and hands over to the ordinary LLM pipeline whenever the model is not confident, so results have the
-same shape as the regular methods and are usually faster.
+Configure `experimentalDecisions`, then call its `act()` or `extract()` methods. Stagehand builds
+bounded choices from page evidence, asks the decision model to select, and uses the configured LLM
+when the request cannot be resolved safely. The methods accept the same arguments and return the
+same result shapes as their ordinary counterparts.
 
-The namespace is opt-in twice: configure a provider when you create Stagehand, then call the methods
-on the namespace. `act()`, `observe()`, and `extract()` on the Stagehand instance itself never use
-the decision model. Calling a namespace method without the configuration fails with an error.
+`act()` selects complete click or literal-fill actions and checks the target before input. Other
+operations use the ordinary LLM pipeline. `extract()` maps schema fields to page records and copies
+values, with schema and evidence checks. `observe()` retains the existing decision-model implementation with LLM fallback. You do not select an action or extraction policy.
+
+The ordinary methods on the Stagehand instance never call the decision provider. A namespace call
+without configuration fails. LLM fallback needs an ordinary model configuration or the existing
+Browserbase gateway; a decision-provider API key does not provide LLM credentials.
 
 ## Providers
 
-| `provider` | Model (default) | Needs |
+| `provider` | Default model | Required connection settings |
 | --- | --- | --- |
-| `"typesafe"` (default) | TypeSafe Jev (`jev-latest`) | `apiKey` |
-| `"cloudflare"` | Cloudflare Clef (`clef`, or `clef-flash`) | `apiKey`, `accountId` |
-| `"perplexity"` | Perplexity Decider (`pplx-decider-latest`) | `apiKey` |
+| `"perplexity"`, the default | `pplx-decider-v1.3` | `apiKey` |
+| `"typesafe"` | `jev-1.14.0` | `apiKey` |
+| `"cloudflare"` | `clef` | `apiKey` and `accountId`, or an account-scoped `apiUrl` |
 
-Acceptance thresholds were tuned on TypeSafe Jev. Other providers answer the same questions through
-the same validation, but their probabilities are not calibrated identically; measure on your own
-pages before relying on them.
+An explicit `model` applies to both action and extraction requests. Perplexity also supports
+`pplx-decider-flash-v1.3`. Providers have different coverage and confidence calibration. The default
+policy is led by Perplexity's live-page comparisons; these results do not guarantee performance on
+all pages or equivalent native coverage from other providers. Only Perplexity currently supplies
+the bounded Locate second reading used by scalar extraction.
 
-The instruction, descriptions of candidate elements built from the accessibility tree, and the page
-URL without query string or fragment are sent to the provider. `extract()` also sends page or
-extracted content. Values of `%variables%` are replaced by their placeholders.
+Candidate descriptions and page context are sent to the provider for actions. Declared variable
+values of at least three characters are redacted in action requests, including values visible from
+earlier actions. Shorter values remain visible. Extraction sends relevant page text and field
+instructions to the provider. Avoid placing sensitive literals in instructions; use variables for
+actions that need them.
 
 ## Configuration
 
-Pass these as `experimentalDecisions` when creating Stagehand. Python uses `experimental_decisions` with snake_case keys (`api_key`, `account_id`, `target_readiness`, ...).
+Pass `experimentalDecisions` when creating Stagehand. Python uses `experimental_decisions` and
+snake_case keys. An omitted provider selects Perplexity. Earlier prototype policy flags are removed
+and rejected by configuration validation.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `provider` | `"typesafe"` | `"typesafe"`, `"cloudflare"` or `"perplexity"`. |
-| `apiKey` | required | The provider's API key. |
-| `model` | provider default | The provider's model name. |
-| `apiUrl` | provider default | An `https` endpoint that replaces the provider's default one. |
-| `accountId` | none | The Cloudflare account id. Required for `"cloudflare"`. |
-| `actConfidence` | `0.7` | Minimum confidence, from 0 to 1, to act on an answer. |
-| `llmFallback` | `true` | Hand over to the LLM pipeline when the decision model is not confident. With `false` the call fails instead. |
-| `argumentLlm` | `true` | Allow a small LLM call that lifts unquoted text to type from the instruction. |
-| `extract` | `"pick"` | `"pick"` picks the elements holding each value and copies their text. `"judge"` keeps the LLM extraction and replaces only its completion check. `"native"` uses Clairic structured extraction for Cloudflare or Decider Locate for Perplexity. |
-| `targetReadiness` | `false` | Act as soon as the target is found and stable instead of waiting out the DOM-settle window. |
-| `tools` | `false` | Let `act()` invoke a WebMCP tool the page registered when the decision model is sure the tool is the request. |
-| `cacheCheck` | `false` | Ask the decision model whether a cached action's selector still points at a matching element before replaying it. |
-| `pageState` | `true` | Check for captchas, access-denied pages, and similar states when no target is found. |
-| `verify` | `"checks"` | Post-action checks: `"off"`, `"checks"`, or `"full"`. |
-| `retryNoEffect` | `false` | Click the runner-up when an ambiguous click provably changed nothing. |
-| `focusFallback` | `false` | On very large pages, show the LLM the decision model's shortlist first. |
+| `provider` | `"perplexity"` | `"perplexity"`, `"typesafe"`, or `"cloudflare"`. |
+| `apiKey` | required | The decision provider's API key. |
+| `model` | provider default | A supported decision model used for both operations. |
+| `apiUrl` | provider endpoint | An HTTPS endpoint override, without query or fragment. |
+| `accountId` | none | Cloudflare account ID, required unless `apiUrl` supplies the account-scoped endpoint. |
 
 <Tabs>
 <Tab title="TypeScript">
@@ -66,7 +64,7 @@ Pass these as `experimentalDecisions` when creating Stagehand. Python uses `expe
 const stagehand = await Stagehand.create({
   browser,
   model: "openai/gpt-5.4-mini",
-  experimentalDecisions: { provider: "typesafe", apiKey: process.env.TYPESAFE_API_KEY! },
+  experimentalDecisions: { apiKey: process.env.PERPLEXITY_API_KEY!, model: "pplx-decider-v1.3" },
 });
 
 await stagehand.experimentalDecisions.act("Click the sign in button");
@@ -572,7 +570,7 @@ console.log(product.data, product.metadata.cache.status);
 stagehand = await Stagehand.create(
     browser=browser,
     model="openai/gpt-5.4-mini",
-    experimental_decisions={"provider": "typesafe", "api_key": os.environ["TYPESAFE_API_KEY"]},
+    experimental_decisions={"api_key": os.environ["PERPLEXITY_API_KEY"], "model": "pplx-decider-v1.3"},
 )
 
 await stagehand.experimental_decisions.act("Click the sign in button")

@@ -5,7 +5,8 @@ import { z } from "zod/v4";
 import { decide, type DecisionQuestion } from "../../../extension/services/decisions/client.js";
 import { CORPUS_DIR, corpusTasks } from "./capture.js";
 import { groupLabels } from "./groupLabels.js";
-import { listGroupProbe, listGroupRanks } from "./mapCopy.js";
+import { baselineModule } from "./baseline.js";
+const { listGroupProbe, listGroupRanks } = await baselineModule("services/decisions/mapCopy");
 import { decisionConfigs, loadFrozen } from "./replay.js";
 
 const configs = {

@@ -254,18 +254,6 @@ class ExperimentalDecisionsConfig(TypedDict):
     model: NotRequired[str]
     api_url: NotRequired[str]
     account_id: NotRequired[str]
-    act: NotRequired[Literal["tree", "plans"]]
-    retry_no_effect: NotRequired[bool]
-    focus_fallback: NotRequired[bool]
-    cache_check: NotRequired[bool]
-    extract: NotRequired[Literal["judge", "pick", "native", "map"]]
-    act_confidence: NotRequired[float]
-    verify: NotRequired[Literal["off", "checks", "full"]]
-    llm_fallback: NotRequired[bool]
-    argument_llm: NotRequired[bool]
-    page_state: NotRequired[bool]
-    tools: NotRequired[bool]
-    target_readiness: NotRequired[bool]
 
 
 class ExternalProxyConfig(TypedDict):

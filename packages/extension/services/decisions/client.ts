@@ -14,6 +14,7 @@ import {
   type DecisionChoiceAnswer,
   type DecisionModelConfig,
   type DecisionNoulAnswer,
+  type DecisionLocateAnswer,
   type DecisionProvider,
   type DecisionQuestion,
   type JsonValue,
@@ -25,9 +26,11 @@ export {
   DECISION_PROVIDERS,
   TYPESAFE_DEFAULT_API_URL,
   TYPESAFE_DEFAULT_MODEL,
+  PERPLEXITY_DEFAULT_MODEL,
   type DecisionAnswer,
   type DecisionChoiceAnswer,
   type DecisionNoulAnswer,
+  type DecisionLocateAnswer,
   type DecisionProviderName,
   type DecisionQuestion,
   type JsonValue,
@@ -83,6 +86,12 @@ export async function decide(
   questions: Record<string, DecisionQuestion>,
 ): Promise<DecisionResponse> {
   const provider = providerFor(config);
+  config.signal?.throwIfAborted();
+  if (
+    Object.values(questions).some((question) => question.type === "locate") &&
+    !provider.supportsLocate
+  )
+    throw new DecisionRequestError(`${provider.label} does not support exact-span reading`);
   const startedAt = Date.now();
   // A choice among one option has one possible answer (a softmax over one
   // option is 1). Providers reject or waste tokens on it, so it never leaves.
@@ -114,7 +123,7 @@ export async function decide(
     };
   }
 
-  // Every chunk sees the same state; the answers are independent per question.
+  // Keep each chunk on the same evidence. Packing can affect providers with cross-field attention.
   const parts = await Promise.all(
     chunks.map((chunk) =>
       requestOnce(
@@ -166,6 +175,10 @@ function prepare(provider: DecisionProvider, questions: Record<string, DecisionQ
     const wireKey = provider.safeId.test(key) ? key : `q${index}`;
     index++;
     keyOf.set(wireKey, key);
+    if (question.type === "locate") {
+      prepared[wireKey] = { type: "locate", instructions: flatten(question.instructions) };
+      continue;
+    }
     if (question.type === "noul") {
       prepared[wireKey] = {
         type: "noul",
@@ -224,6 +237,7 @@ function validate(
   question: DecisionQuestion,
   raw: unknown,
   options: Map<string, string> | undefined,
+  state: JsonValue,
 ): DecisionAnswer {
   const bad = (why: string): never => {
     throw new DecisionRequestError(
@@ -231,6 +245,32 @@ function validate(
     );
   };
   const answer = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : bad("missing");
+  if (question.type === "locate") {
+    if (typeof state !== "string" || !Array.isArray(answer.spans))
+      return bad("invalid span payload");
+    const points = Array.from(state);
+    const spans = answer.spans.map((rawSpan) => {
+      if (!rawSpan || typeof rawSpan !== "object") return bad("invalid span");
+      const span = rawSpan as Record<string, unknown>;
+      const { start, end, text } = span;
+      const score = probability(span.score);
+      if (
+        typeof start !== "number" ||
+        typeof end !== "number" ||
+        !Number.isInteger(start) ||
+        !Number.isInteger(end) ||
+        start < 0 ||
+        end <= start ||
+        end > points.length ||
+        typeof text !== "string" ||
+        points.slice(start, end).join("") !== text ||
+        score === undefined
+      )
+        return bad("span does not match evidence");
+      return { start, end, text, score };
+    });
+    return { type: "locate", spans };
+  }
   if (question.type === "noul") {
     const noul = probability(answer.noul ?? answer.probability);
     return { type: "noul", noul: noul ?? bad("noul out of range") };
@@ -327,7 +367,11 @@ async function requestOnce(
           response.status,
         );
       }
-      config.recordDecisionUsage?.(decoded.usage);
+      config.recordDecisionUsage?.({
+        ...decoded.usage,
+        provider: provider.name,
+        model: decoded.model || config.model || provider.defaultModel,
+      });
       const answers: Record<string, DecisionAnswer> = {};
       try {
         for (const [wireKey, key] of aliases.keyOf) {
@@ -337,6 +381,7 @@ async function requestOnce(
             questions[key]!,
             decoded.answers[wireKey],
             aliases.optionOf.get(key),
+            state,
           );
         }
       } catch (error) {
@@ -389,5 +434,12 @@ export function noulAnswer(response: DecisionResponse, key: string): DecisionNou
   if (!answer || !("noul" in answer)) {
     throw new DecisionRequestError(`Decision response is missing noul answer "${key}"`);
   }
+  return answer;
+}
+
+export function locateAnswer(response: DecisionResponse, key: string): DecisionLocateAnswer {
+  const answer = response.answers[key];
+  if (!answer || answer.type !== "locate")
+    throw new DecisionRequestError(`Decision response is missing locate answer "${key}"`);
   return answer;
 }

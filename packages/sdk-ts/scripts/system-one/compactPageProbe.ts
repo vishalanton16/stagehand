@@ -8,6 +8,7 @@ import type { LLMGenerateParams, LLMGenerateResult } from "@browserbasehq/stageh
 import { StagehandLogger } from "../../../extension/logger.js";
 import { extract } from "../../../extension/services/extractService.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
+import { compactExtractionTree } from "./experiments/compactExtractionTree.js";
 import { compactPageTasks } from "./compactPageTasks.js";
 
 const [snapshotDir, dir] = process.argv.slice(2);
@@ -127,16 +128,38 @@ async function replay(
         screenshot: async () => new Uint8Array(),
       },
       model: { source: "client" },
-      clientLLMGenerate: (params) => timedGenerate(params, calls),
+      clientLLMGenerate: (params) =>
+        timedGenerate(
+          arm.endsWith("-compact")
+            ? {
+                ...params,
+                messages: params.messages.map((message) => ({
+                  ...message,
+                  content:
+                    !Array.isArray(message.content) && message.content.type === "text"
+                      ? {
+                          ...message.content,
+                          text: message.content.text.replace(
+                            snapshot.tree,
+                            compactExtractionTree(
+                              snapshot.tree,
+                              new Set(Object.keys(snapshot.urlMap)),
+                            ),
+                          ),
+                        }
+                      : message.content,
+                })),
+              }
+            : params,
+          calls,
+        ),
       logger,
       decisions: cascade
         ? {
             ...decisionConfig,
-            extract: "map",
             recordDecisionUsage: (usage) => decisions.push(usage),
           }
         : undefined,
-      compactEvidenceExperiment: arm.endsWith("-compact"),
     });
     data = result.data;
   } catch (cause) {

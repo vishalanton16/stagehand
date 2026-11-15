@@ -9,6 +9,7 @@ export type JsonValue =
 
 export type DecisionQuestion =
   | { type: "choice"; instructions: JsonValue; criteria: Record<string, JsonValue> }
+  | { type: "locate"; instructions: JsonValue }
   | { type: "noul"; instructions: JsonValue; criteria?: { true: JsonValue; false: JsonValue } };
 
 export type DecisionChoiceAnswer = {
@@ -20,17 +21,23 @@ export type DecisionChoiceAnswer = {
 
 export type DecisionNoulAnswer = { type: "noul"; noul: number };
 
-export type DecisionAnswer = DecisionChoiceAnswer | DecisionNoulAnswer;
+export type DecisionLocateAnswer = {
+  type: "locate";
+  spans: { start: number; end: number; text: string; score: number }[];
+};
+export type DecisionAnswer = DecisionChoiceAnswer | DecisionNoulAnswer | DecisionLocateAnswer;
 
 export const DECISION_PROVIDERS = ["typesafe", "cloudflare", "perplexity"] as const;
 export type DecisionProviderName = (typeof DECISION_PROVIDERS)[number];
 
 export type DecisionModelConfig = {
-  /** Which decision model service to call. Default `"typesafe"`. */
+  /** Which decision model service to call. Default `"perplexity"`. */
   provider?: DecisionProviderName;
   apiKey: string;
   signal?: AbortSignal;
-  recordDecisionUsage?: (usage: DecodedResponse["usage"]) => void;
+  recordDecisionUsage?: (
+    usage: DecodedResponse["usage"] & { provider?: DecisionProviderName; model?: string },
+  ) => void;
   model?: string;
   /** Overrides the provider's base URL (https only). */
   apiUrl?: string;
@@ -55,6 +62,7 @@ export type DecisionProvider = {
   defaultTimeoutMs: number;
   /** A request with more questions is split into several (same state) and the answers merged. */
   maxQuestions: number;
+  supportsLocate: boolean;
   /**
    * Question keys and option ids the provider accepts as they are. Others are
    * sent under a generated alias and mapped back, so callers never care.
@@ -118,7 +126,8 @@ function errorType(body: string): string | undefined {
 }
 
 export const TYPESAFE_DEFAULT_API_URL = "https://api.typesafe.ai";
-export const TYPESAFE_DEFAULT_MODEL = "jev-latest";
+export const TYPESAFE_DEFAULT_MODEL = "jev-1.14.0";
+export const PERPLEXITY_DEFAULT_MODEL = "pplx-decider-v1.3";
 
 const typesafe: DecisionProvider = {
   name: "typesafe",
@@ -127,6 +136,7 @@ const typesafe: DecisionProvider = {
   defaultTimeoutMs: 8_000,
   // No documented limit; requests are sent whole, as they always were.
   maxQuestions: 1_000,
+  supportsLocate: false,
   safeId: ANY_ID,
   structuredText: true,
   encode: (config, state, questions) => ({
@@ -145,6 +155,7 @@ const cloudflare: DecisionProvider = {
   defaultModel: "clef",
   defaultTimeoutMs: 15_000,
   maxQuestions: 64,
+  supportsLocate: false,
   safeId: PLAIN_ID,
   structuredText: false,
   encode: (config, state, questions) => {
@@ -170,15 +181,16 @@ const cloudflare: DecisionProvider = {
 const perplexity: DecisionProvider = {
   name: "perplexity",
   label: "Perplexity",
-  defaultModel: "pplx-decider-latest",
+  defaultModel: PERPLEXITY_DEFAULT_MODEL,
   defaultTimeoutMs: 15_000,
   maxQuestions: 128,
+  supportsLocate: true,
   safeId: PLAIN_ID,
   structuredText: false,
   encode: (config, state, questions) => ({
     url: `${base(config, "https://api.perplexity.ai")}/v1/decisions`,
     headers: bearer(config),
-    body: { model: config.model ?? "pplx-decider-latest", state, questions },
+    body: { model: config.model ?? PERPLEXITY_DEFAULT_MODEL, state, questions },
   }),
   decode: decodeSystemOne,
   errorCode: errorType,
@@ -191,7 +203,7 @@ const PROVIDERS: Record<DecisionProviderName, DecisionProvider> = {
 };
 
 export function providerFor(config: DecisionModelConfig): DecisionProvider {
-  const provider = PROVIDERS[config.provider ?? "typesafe"];
+  const provider = PROVIDERS[config.provider ?? "perplexity"];
   if (!provider) {
     throw new Error(`experimentalDecisions: unknown provider "${String(config.provider)}"`);
   }

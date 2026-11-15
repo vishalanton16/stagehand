@@ -1,5 +1,7 @@
 # System One docs
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Status and handoff for experimental System One support. Extraction (`extract: "map"`) uses one decision model with an LLM fallback. The new opt-in `act: "plans"` has [live action results](./ACT_RESULTS.md) and a [measurement plan](./ACT_EXPERIMENTS.md). The extraction measurements below remain separate.
 
 | Doc                                                    | Purpose                                                                                 |

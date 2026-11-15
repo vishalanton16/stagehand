@@ -1,5 +1,7 @@
 # Possible directions
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Ideas that are useful to remember, ranked by how well they fit the **product default** (one System One + one LLM fallback). Most of these are experiments, not commitments.
 
 ## A. Strengthen the single-model gate (preferred)

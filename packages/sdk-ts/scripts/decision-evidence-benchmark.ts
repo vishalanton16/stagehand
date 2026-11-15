@@ -1,3 +1,4 @@
+import { baselineModule } from "./system-one/baseline.js";
 import OpenAI from "openai";
 import * as inference from "../../extension/inference.js";
 import { generateWithOpenAI } from "./openaiStructuredGeneration.js";
@@ -5,14 +6,10 @@ import { collectRecords, rankRecords, renderRecords, oracleRecords } from "./dec
 import { z } from "zod/v4";
 import { StagehandExtractParamsSchema } from "@browserbasehq/stagehand-protocol/schemas";
 import type { StagehandResultUsage } from "@browserbasehq/stagehand-protocol/types";
-import { extractWithClairic } from "../../extension/services/decisions/clairic.js";
-import { extractWithDecider } from "../../extension/services/decisions/decider.js";
-import {
-  buildView,
-  focusOutline,
-  parseOutline,
-  scoreCandidates,
-} from "../../extension/services/decisions/tree.js";
+import { extractWithClairic } from "./system-one/experiments/clairic.js";
+import { extractWithDecider } from "./system-one/experiments/decider.js";
+const { buildView, focusOutline, parseOutline, scoreCandidates } =
+  await baselineModule("services/decisions/tree");
 import { runWithProgress } from "../../extension/understudy/progress.js";
 import { localBrowser, Stagehand } from "../src/index.js";
 

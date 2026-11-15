@@ -196,10 +196,14 @@ describe.each(DECISION_PROVIDERS)("decision provider %s", (name) => {
 describe("provider wire formats", () => {
   it("keeps TypeSafe's request exactly as the pipeline wrote it", async () => {
     const seen = fakeProvider("typesafe", () => ({ p: 0.5 }));
-    await decide({ apiKey: `k-${Math.random()}` }, { url: "https://e.com" }, QUESTIONS);
+    await decide(
+      { provider: "typesafe", apiKey: `k-${Math.random()}` },
+      { url: "https://e.com" },
+      QUESTIONS,
+    );
     expect(seen[0]!.body).toEqual({
       state: { url: "https://e.com" },
-      model: "jev-latest",
+      model: "jev-1.14.0",
       questions: QUESTIONS,
     });
   });
@@ -217,7 +221,7 @@ describe("provider wire formats", () => {
         state: unknown;
         questions: Record<string, { instructions: unknown; criteria?: Record<string, unknown> }>;
       };
-      expect(body.model).toBe(name === "cloudflare" ? "clef" : "pplx-decider-latest");
+      expect(body.model).toBe(name === "cloudflare" ? "clef" : "pplx-decider-v1.3");
       expect(body.state).toEqual({ url: "https://e.com" });
       const keys = Object.keys(body.questions);
       expect(keys.every((key) => /^[A-Za-z0-9_.-]{1,100}$/.test(key))).toBe(true);

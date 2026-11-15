@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod/v4";
-import { listGroupRanks } from "./mapCopy.js";
+import { baselineModule } from "./baseline.js";
+const { listGroupRanks } = await baselineModule("services/decisions/mapCopy");
 import { CORPUS_DIR, corpusTasks } from "./capture.js";
 import { groupLabels } from "./groupLabels.js";
 

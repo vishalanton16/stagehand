@@ -480,7 +480,6 @@ describe("Stagehand.create", () => {
         provider: "cloudflare",
         apiKey: "token",
         accountId: "account-1",
-        targetReadiness: true,
       },
     });
 
@@ -490,7 +489,6 @@ describe("Stagehand.create", () => {
           provider: "cloudflare",
           api_key: "token",
           account_id: "account-1",
-          target_readiness: true,
         },
       },
     });

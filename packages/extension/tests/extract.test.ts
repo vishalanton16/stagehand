@@ -7,7 +7,6 @@ import { Progress } from "../understudy/progress.js";
 import { extract } from "../inference.js";
 import { StagehandLogger } from "../logger.js";
 import * as cacheService from "../services/cacheService.js";
-import * as extractCheck from "../services/decisions/extractCheck.js";
 import * as extractService from "../services/extractService.js";
 
 describe("extract inference", () => {
@@ -109,52 +108,6 @@ describe("extract inference", () => {
 });
 
 describe("extract service", () => {
-  it.each([false, undefined])(
-    "keeps extracted data when the Decision verdict is %s",
-    async (verdict) => {
-      const judge = vi.spyOn(extractCheck, "extractionCompleted");
-      if (verdict === undefined)
-        judge.mockRejectedValue(new Error("Decision provider unavailable"));
-      else judge.mockResolvedValue({ completed: verdict, score: 0 });
-      try {
-        const clientLLMGenerate = vi.fn(async () => structuredResult({ name: "Lens" }));
-        const onLog = vi.fn();
-        const result = await extractService.extract({
-          params: {
-            pageId: "page-1",
-            instruction: "Extract the product name",
-            schema: z.json().parse(z.toJSONSchema(z.object({ name: z.string() }))),
-          },
-          page: {
-            captureSnapshot: async () => ({
-              combinedTree: "[0-1] heading: Lens",
-              combinedXpathMap: {},
-              combinedUrlMap: {},
-            }),
-            screenshot: async () => new Uint8Array(),
-          },
-          model: { source: "client" },
-          clientLLMGenerate,
-          decisions: { provider: "perplexity", apiKey: "test", extract: "judge" },
-          logger: new StagehandLogger({ tracer: trace.getTracer("extract-service-test") }, onLog),
-        });
-        expect(judge).toHaveBeenCalledOnce();
-        expect(clientLLMGenerate).toHaveBeenCalledOnce();
-        expect(result.data).toEqual({ name: "Lens" });
-        expect(onLog).toHaveBeenCalledWith(
-          expect.objectContaining({
-            message:
-              verdict === undefined
-                ? "Extraction result returned"
-                : "Extraction incomplete after processing all data",
-          }),
-        );
-      } finally {
-        judge.mockRestore();
-      }
-    },
-  );
-
   it("returns schema-valid partial data without a completion call or verdict", async () => {
     const clientLLMGenerate = vi.fn(async () =>
       structuredResult({ products: [{ name: "Lens", stock: 0 }] }),

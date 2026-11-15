@@ -1,5 +1,7 @@
 # Act design audit (research)
 
+Current cleanup status: see [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md). Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
+
 Access date for all URLs: **2026-11-15**. Research only; no product edits beyond this owned note.
 
 **Historical** = Miguel stack / chat / earlier benchmarks. **Current** = local `packages/extension/services/decisions/` on this fork (Decider/Jev/Clef; no OpenAI provider wired yet).
@@ -186,7 +188,7 @@ Grounded in sources + existing evidence. One variable each; wrong accepts + cove
 | Miguel PRs                      | https://github.com/browserbase/stagehand/pull/2951 … /2993                     | 2026-11-15 |
 | prompt-loc                      | https://github.com/browserbase/stagehand/tree/prompt-loc                       | 2026-11-15 |
 
-Local: [`pipeline.ts`](../../../../extension/services/decisions/pipeline.ts), [`pick.ts`](../../../../extension/services/decisions/pick.ts), [`tree.ts`](../../../../extension/services/decisions/tree.ts), [`cacheCheck.ts`](../../../../extension/services/decisions/cacheCheck.ts), [`providers.ts`](../../../../extension/services/decisions/providers.ts), [`ACT_EXPERIMENTS.md`](./ACT_EXPERIMENTS.md), [`vendor-repos/cursor_stagehand_decision_models_review.md`](../../../../../vendor-repos/cursor_stagehand_decision_models_review.md), [`vendor-repos/chat-transcript.md`](../../../../../vendor-repos/chat-transcript.md).
+Local: [`pipeline.ts`](./CLEANUP_RESULTS.md#historical-source-and-evidence), [`pick.ts`](./CLEANUP_RESULTS.md#historical-source-and-evidence), [`tree.ts`](../../../../extension/services/decisions/tree.ts), [`cacheCheck.ts`](./CLEANUP_RESULTS.md#historical-source-and-evidence), [`providers.ts`](../../../../extension/services/decisions/providers.ts), [`ACT_EXPERIMENTS.md`](./ACT_EXPERIMENTS.md), [`vendor-repos/cursor_stagehand_decision_models_review.md`](../../../../../vendor-repos/cursor_stagehand_decision_models_review.md), [`vendor-repos/chat-transcript.md`](../../../../../vendor-repos/chat-transcript.md).
 
 ## Experiment follow-up
 

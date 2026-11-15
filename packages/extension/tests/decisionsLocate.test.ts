@@ -1,7 +1,7 @@
 import { StagehandExtractParamsSchema } from "@browserbasehq/stagehand-protocol/schemas";
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod/v4";
-import { extractWithDecider } from "../services/decisions/decider.js";
+import { extractWithDecider } from "../../sdk-ts/scripts/system-one/experiments/decider.js";
 import { runWithProgress } from "../understudy/progress.js";
 
 afterEach(() => vi.unstubAllGlobals());

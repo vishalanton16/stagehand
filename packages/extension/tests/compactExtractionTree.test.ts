@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { compactExtractionTree } from "../services/compactExtractionTree.js";
+import { compactExtractionTree } from "../../sdk-ts/scripts/system-one/experiments/compactExtractionTree.js";
 
 it("compacts repeated child text and keeps table order, exact literals and link IDs", () => {
   const tree = [

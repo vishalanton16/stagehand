@@ -1,3 +1,4 @@
+import { Progress } from "../understudy/progress.js";
 import { trace } from "@opentelemetry/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -6,7 +7,7 @@ import {
   choosePlan,
   type ActionSnapshot,
 } from "../services/decisions/actionPlans.js";
-import { runDecisionsAct, type DecisionsActDeps } from "../services/decisions/pipeline.js";
+import { runDecisionsAct, type DecisionsActDeps } from "../services/decisions/act.js";
 import { StagehandLogger } from "../logger.js";
 import { resolveLocatorWithHops } from "../understudy/deepLocator.js";
 import type { ElementFacts } from "../services/decisions/actionFacts.js";
@@ -95,7 +96,7 @@ function provider(selected: string, confidence = 0.98) {
   vi.stubGlobal("fetch", fetch);
   return fetch;
 }
-const config = { apiKey: "test", act: "plans" } as const;
+const config = { provider: "typesafe", apiKey: "test" } as const;
 
 describe("complete action choices", () => {
   it("recovers an AX-omitted editable root with its actual label, position and descendants", () => {
@@ -249,6 +250,7 @@ function dependencies(page = snapshot()) {
       }),
       evaluate,
       mainFrame: () => ({}),
+      getOrdinal: () => 0,
       url: () => page.url,
     },
     instruction: "Open details",
@@ -259,7 +261,7 @@ function dependencies(page = snapshot()) {
       undefined,
       "off",
     ),
-    ensureTimeRemaining: () => {},
+    progress: new Progress("action-test", 0),
     takeAction,
   } as unknown as DecisionsActDeps;
   return { deps, takeAction, evaluate, locator };
@@ -274,6 +276,7 @@ describe("action execution guards", () => {
     expect(await runDecisionsAct(config, deps)).toMatchObject({ kind: "done" });
     expect(takeAction).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ selector: "xpath=/html/body/div", method: "fill" }),
+      "0-7",
     );
   });
   it("rejects a replacement at the same xpath before any side effect", async () => {
@@ -307,10 +310,11 @@ describe("action execution guards", () => {
     expect(await runDecisionsAct(config, deps)).toMatchObject({ kind: "done" });
     expect(takeAction).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ selector: "xpath=/html/body/a", method: "click", arguments: [] }),
+      "0-2",
     );
   });
 
-  it("preserves the performed fill when read-back fails before LLM handoff", async () => {
+  it("returns a performed fill failure without executing LLM fallback", async () => {
     provider("action_1");
     const { deps, takeAction, locator } = dependencies();
     deps.instruction = 'Fill Search with "hello"';
@@ -318,9 +322,13 @@ describe("action execution guards", () => {
     locator.inputValue = async () => "wrong value";
     const outcome = await runDecisionsAct(config, deps);
     expect(outcome).toMatchObject({
-      kind: "fallback",
-      reason: "fill_readback_mismatch",
-      priorActions: [expect.objectContaining({ method: "fill", arguments: ["hello"] })],
+      kind: "done",
+      noCache: true,
+      result: {
+        success: false,
+        message: "fill_readback_mismatch",
+        actions: [expect.objectContaining({ method: "fill", arguments: ["hello"] })],
+      },
     });
     expect(takeAction).toHaveBeenCalledTimes(1);
   });

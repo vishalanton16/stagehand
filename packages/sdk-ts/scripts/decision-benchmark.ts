@@ -32,13 +32,9 @@ const configs: Record<string, ExperimentalDecisionsConfig | undefined> = {
   flash: {
     provider: "perplexity",
     apiKey: env.PERPLEXITY_API_KEY!,
-    model: "pplx-decider-flash-latest",
+    model: "pplx-decider-flash-v1.3",
   },
 };
-configs.clairic = { ...configs.clef!, extract: "native" };
-configs.locate = { ...configs.decider!, extract: "native" };
-configs.locateFlash = { ...configs.flash!, extract: "native" };
-configs.judge = { ...configs.jev!, extract: "judge" };
 
 const pricingSchema = z.object({
   basic: z.number().describe("Basic plan price in USD per user per month, billed yearly"),

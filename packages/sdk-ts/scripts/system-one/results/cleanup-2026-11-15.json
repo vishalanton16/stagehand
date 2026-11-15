@@ -1,0 +1,399 @@
+{
+  "baselineRevision": "9080038614bcaf5ee32afad44970f282ad0c73bd",
+  "kind": "cleanup regression validation; not an independent held-out or release certificate",
+  "preservedEvidence": {
+    "files": 2432,
+    "bytes": 722125690,
+    "sourceArchive": {
+      "revision": "9080038614bcaf5ee32afad44970f282ad0c73bd",
+      "archive": "baseline-complete-source.tar.gz",
+      "sha256": "0c8bbe9b9f84307092f07be780b50a2c5f2fb0e44d478ed5098b01851a9c30b0",
+      "dependencyLock": "a28e2c8e137e40e97ba782c67ead98d146b5a9660f688d611defc49bd8b80e76"
+    }
+  },
+  "actionSuite": {
+    "action-suite-baseline-2": {
+      "baseline": {
+        "passed": 32,
+        "total": 40,
+        "failedTasks": [
+          "bidnet",
+          "heal_custom_dropdown",
+          "heal_simple_google_search",
+          "custom_dropdown",
+          "hidden_input_dropdown",
+          "multi_tab",
+          "tab_handling",
+          "vantechjournal"
+        ]
+      }
+    },
+    "action-suite-cleaned": {
+      "cleaned": {
+        "passed": 30,
+        "total": 40,
+        "failedTasks": [
+          "bidnet",
+          "custom_dropdown",
+          "heal_scroll_50",
+          "heal_custom_dropdown",
+          "hidden_input_dropdown",
+          "multi_tab",
+          "oopif_in_csr",
+          "nonsense_action",
+          "tab_handling",
+          "vantechjournal"
+        ]
+      }
+    },
+    "action-guard-followup": {
+      "cleaned": {
+        "passed": 5,
+        "total": 6,
+        "failedTasks": ["nonsense_action"]
+      }
+    },
+    "action-suite-final": {
+      "cleaned": {
+        "passed": 36,
+        "total": 40,
+        "failedTasks": ["bidnet", "multi_tab", "tab_handling", "vantechjournal"]
+      }
+    }
+  },
+  "liveActions": {
+    "luna": {
+      "passed": 9,
+      "total": 9,
+      "failedTasks": []
+    },
+    "plans": {
+      "passed": 9,
+      "total": 9,
+      "failedTasks": []
+    }
+  },
+  "staleTargets": {
+    "luna": {
+      "passed": 0,
+      "total": 4,
+      "failedTasks": ["replace", "repurpose", "replace", "repurpose"]
+    },
+    "plans": {
+      "passed": 4,
+      "total": 4,
+      "failedTasks": []
+    }
+  },
+  "workflows": {
+    "luna": {
+      "passed": 4,
+      "total": 4,
+      "failedTasks": []
+    },
+    "plans": {
+      "passed": 4,
+      "total": 4,
+      "failedTasks": []
+    }
+  },
+  "extractionReplay": {
+    "baseline-decider": {
+      "passed": 80,
+      "total": 82,
+      "failedTasks": ["hold5_nist_temp", "hold7_github_repo_qualifiers"],
+      "directAccepts": 63,
+      "wrongDirectAccepts": 1,
+      "fallbacks": 19
+    },
+    "runtime-decider": {
+      "passed": 79,
+      "total": 82,
+      "failedTasks": ["hold5_nist_temp", "hold7_github_repo_qualifiers", "hold5_tld_list"],
+      "directAccepts": 65,
+      "wrongDirectAccepts": 1,
+      "fallbacks": 17
+    }
+  },
+  "extractionReplayArchive": "eeeced6e-f896-4cf2-95bb-16ca9cb29431",
+  "extractionSelection": {
+    "selected": [
+      "area_codes",
+      "staff_members",
+      "regulations_table",
+      "csa",
+      "public_notices",
+      "jstor_news",
+      "jfk_links",
+      "rockauto",
+      "zillow",
+      "memorial_healthcare",
+      "baptist_health",
+      "resistor",
+      "hamilton_weather",
+      "professional_info",
+      "recipe",
+      "aigrant",
+      "geniusee",
+      "single_link",
+      "linear_pricing",
+      "apple_pricing",
+      "github_stars",
+      "repo_name",
+      "geniusee_2",
+      "aigrant_2",
+      "hacker_news",
+      "wiki_population",
+      "books_toscrape",
+      "quotes_toscrape",
+      "python_releases",
+      "scrapethissite_countries",
+      "wiki_python_infobox",
+      "hockey_teams",
+      "tallest_buildings",
+      "pypi_requests",
+      "lobsters",
+      "books_travel",
+      "eiffel_infobox",
+      "python_events",
+      "mdn_status",
+      "webscraper_ecommerce",
+      "webscraper_tables",
+      "quotes_humor",
+      "book_product",
+      "hn_show",
+      "github_typescript",
+      "highest_mountains",
+      "rubygems_rails",
+      "apollo11_infobox",
+      "python_docs_versions",
+      "tiobe_top20",
+      "xrates_alphabetical",
+      "craigslist_canada",
+      "brew_wget",
+      "gutenberg_pride",
+      "gutenberg_isbn",
+      "rapidtables_inch_cm",
+      "text_npr",
+      "gomod_mux",
+      "gomod_stars_absent",
+      "boxoffice_2024",
+      "hold5_sqlite_limits",
+      "hold5_rfc_absence",
+      "hold5_nist_temp",
+      "hold5_html_tables",
+      "hold5_postgres_sections",
+      "hold5_tld_list",
+      "hold6_nasa_mars",
+      "hold6_curl_protocols",
+      "hold6_rust_types",
+      "hold6_economics_school",
+      "hold7_sqlite_storage_classes",
+      "hold7_kubernetes_pod_phases",
+      "hold7_postgres_range_names",
+      "hold7_wasm_number_types",
+      "hold7_github_repo_qualifiers",
+      "confirm_nginx_signals",
+      "promotion_sqlite_date_functions",
+      "live_iana_media",
+      "live_kubernetes_services",
+      "live_w3c_landmarks",
+      "live_docker_container_filters",
+      "live_mdn_promise_methods"
+    ],
+    "excludedMissingSnapshots": [
+      "apartments",
+      "promotion_dockerfile_overview",
+      "promotion_neon_plans",
+      "promotion_public_runner_architectures",
+      "promotion_git_range_shorthands",
+      "live_redis_general_data_types",
+      "live_python_combinatoric_iterators"
+    ]
+  },
+  "fallbackDiscrepancy": {
+    "task": "hold5_tld_list",
+    "identicalFallbackRequest": true,
+    "proofSha256": "e6b55b689e16e5707737aa9bd0db4bf52797a063fc5ef940b9b79fcd8b732727",
+    "reason": "Both paths escalated without any decision request; Luna sampled a different list shape."
+  },
+  "sdkExtractionFixtures": {
+    "decider": {
+      "passed": 6,
+      "total": 6,
+      "failedTasks": []
+    },
+    "flash": {
+      "passed": 6,
+      "total": 6,
+      "failedTasks": []
+    },
+    "luna": {
+      "passed": 6,
+      "total": 6,
+      "failedTasks": []
+    }
+  },
+  "controlSmokes": {
+    "default-control-smoke": {
+      "kind": "controlled-dom-compatibility",
+      "cases": [
+        {
+          "name": "plaintext-editor",
+          "html": "<h1>Editor</h1><div id=\"target\" aria-label=\"Message editor\" contenteditable=\"plaintext-only\">old text</div>",
+          "instruction": "Fill the Message editor with \"fresh evidence\".",
+          "expected": "fresh evidence",
+          "shouldAct": true
+        },
+        {
+          "name": "nested-editor",
+          "html": "<h1>Editor</h1><div id=\"target\" aria-label=\"Message editor\" contenteditable=\"true\"><p>old text</p></div>",
+          "instruction": "Fill the Message editor with \"fresh evidence\".",
+          "expected": "fresh evidence",
+          "shouldAct": true
+        },
+        {
+          "name": "readonly-field",
+          "html": "<h1>Form</h1><label>Protected field<input id=\"target\" readonly value=\"protected\"></label>",
+          "instruction": "Fill Protected field with \"replacement\".",
+          "expected": "protected",
+          "shouldAct": false
+        }
+      ],
+      "decisionModel": "pplx-decider-v1.3",
+      "sourceHashes": {
+        "packages/extension/services/decisions/actionPlans.ts": "6b6c00ec742bab4465e9a21953d472ca48bcdd8937082d13104537ba79fc89d5",
+        "packages/extension/services/decisions/actionFacts.ts": "afed63493751b183dd974775e7c82b39d4866d568107ee95b7693243157666a4",
+        "packages/extension/services/decisions/actionGuard.ts": "156a830a5b6dfc8aca0e4958ea4bc12fe8b6c861cdca2f735908d3e33bbc8367",
+        "packages/extension/services/decisions/act.ts": "a882d6f4bcbab25791d7ad8f9cc7dc547c3048dd5aff9dc278a70a47d5e42ba6",
+        "packages/extension/services/decisions/actionTarget.ts": "ec7b76f12f3d946681f8321278143d6d5b1f4960eea09845baf2485b78ccf5b1",
+        "packages/extension/services/decisions/config.ts": "b574d05a0dbd9aaf5a4a26f6cb0720518aa4205b94be3a3b1548e63b9d8a8beb",
+        "packages/extension/services/decisions/outline.ts": "c6b9bd6ed9fca5ac2d953afde74b9308bc4413e863fc7ad75710056287105c2e",
+        "packages/extension/services/decisions/tree.ts": "3f61c3b61000bfba36dd24e8281e3fff8c5e6b3d26b195d94d98ba5d5953fb56",
+        "packages/extension/services/decisions/client.ts": "b68af28192c5b512664bb213af1bcafd19edb433644ec862db451cd081db4e49",
+        "packages/extension/services/decisions/providers.ts": "21b7a04fc91704f9ef4a5660da5b2477e380a9e9af6049fd535da46e08534b0f",
+        "packages/extension/services/decisions/args.ts": "85ba904eefbf530862ebee52898aca75d45e57697bb4b493e658c76427f7d93c",
+        "packages/extension/services/actService.ts": "443d48035f46c5132eb9fa8c71fe7d3a7d2764712f6a8b605d91a8a28352fc6d",
+        "packages/extension/inference.ts": "c386af2a3b85e97a3f4a28e3119efe6d54b2e86e9c5777241907a981321e707b",
+        "packages/extension/prompt.ts": "c6a74c3410f8621d8b09010f46cf2c8afca2a12047082f16c755c2257b3a7f39",
+        "packages/protocol/schemas.ts": "c4368e596ff5a513631c222822713ad0e0b1f7b829c3c2aba5d55fe8dd9e64f9",
+        "packages/sdk-ts/scripts/system-one/act/capture.ts": "07503cfe64474c6c4beeaf6c066a73df979ac07b064dfecc785c1e4fee1f7dcd",
+        "packages/sdk-ts/scripts/system-one/act/live.ts": "22c5d396759cd3a8b676e7d164c83c4f244d5d67202e3ffbbc768a325bb48d1c",
+        "packages/sdk-ts/scripts/system-one/act/replay.ts": "74f07bda7da38506e2e00cf3313edde3104d3490094324dcfd60e8c5ff3882ff",
+        "packages/sdk-ts/scripts/system-one/act/tasks.ts": "60d408281c7602e3b85560d53c8c9b3e12ae343ca54ff69c5f6514237dbd0422",
+        "packages/sdk-ts/scripts/system-one/act/archive.ts": "4fa93d9c3ddbfac9c37d1ba9dd3ce26ac923d6e7a94ab106b29681905aef190d",
+        "packages/sdk-ts/scripts/system-one/act/workflows.ts": "7ed948a96791d4ba59a2fe737751034ce26997e1f3eb13987e55347a8ec3e9d4",
+        "packages/sdk-ts/scripts/system-one/act/mutations.ts": "aa7a581591deadf22b839054693eb2491acbc10ce956a1654463d6518b3734a2",
+        "packages/sdk-ts/scripts/system-one/act/controls.ts": "0a7b4f20816525656b967bddd2e1f9d384fdd7a648e79da8ef1105ed4b5b8958"
+      }
+    },
+    "flash-control-smoke": {
+      "kind": "controlled-dom-compatibility",
+      "cases": [
+        {
+          "name": "plaintext-editor",
+          "html": "<h1>Editor</h1><div id=\"target\" aria-label=\"Message editor\" contenteditable=\"plaintext-only\">old text</div>",
+          "instruction": "Fill the Message editor with \"fresh evidence\".",
+          "expected": "fresh evidence",
+          "shouldAct": true
+        },
+        {
+          "name": "nested-editor",
+          "html": "<h1>Editor</h1><div id=\"target\" aria-label=\"Message editor\" contenteditable=\"true\"><p>old text</p></div>",
+          "instruction": "Fill the Message editor with \"fresh evidence\".",
+          "expected": "fresh evidence",
+          "shouldAct": true
+        },
+        {
+          "name": "readonly-field",
+          "html": "<h1>Form</h1><label>Protected field<input id=\"target\" readonly value=\"protected\"></label>",
+          "instruction": "Fill Protected field with \"replacement\".",
+          "expected": "protected",
+          "shouldAct": false
+        }
+      ],
+      "decisionModel": "pplx-decider-flash-v1.3",
+      "sourceHashes": {
+        "packages/extension/services/decisions/actionPlans.ts": "6b6c00ec742bab4465e9a21953d472ca48bcdd8937082d13104537ba79fc89d5",
+        "packages/extension/services/decisions/actionFacts.ts": "afed63493751b183dd974775e7c82b39d4866d568107ee95b7693243157666a4",
+        "packages/extension/services/decisions/actionGuard.ts": "156a830a5b6dfc8aca0e4958ea4bc12fe8b6c861cdca2f735908d3e33bbc8367",
+        "packages/extension/services/decisions/act.ts": "a882d6f4bcbab25791d7ad8f9cc7dc547c3048dd5aff9dc278a70a47d5e42ba6",
+        "packages/extension/services/decisions/actionTarget.ts": "ec7b76f12f3d946681f8321278143d6d5b1f4960eea09845baf2485b78ccf5b1",
+        "packages/extension/services/decisions/config.ts": "b574d05a0dbd9aaf5a4a26f6cb0720518aa4205b94be3a3b1548e63b9d8a8beb",
+        "packages/extension/services/decisions/outline.ts": "c6b9bd6ed9fca5ac2d953afde74b9308bc4413e863fc7ad75710056287105c2e",
+        "packages/extension/services/decisions/tree.ts": "3f61c3b61000bfba36dd24e8281e3fff8c5e6b3d26b195d94d98ba5d5953fb56",
+        "packages/extension/services/decisions/client.ts": "b68af28192c5b512664bb213af1bcafd19edb433644ec862db451cd081db4e49",
+        "packages/extension/services/decisions/providers.ts": "21b7a04fc91704f9ef4a5660da5b2477e380a9e9af6049fd535da46e08534b0f",
+        "packages/extension/services/decisions/args.ts": "85ba904eefbf530862ebee52898aca75d45e57697bb4b493e658c76427f7d93c",
+        "packages/extension/services/actService.ts": "443d48035f46c5132eb9fa8c71fe7d3a7d2764712f6a8b605d91a8a28352fc6d",
+        "packages/extension/inference.ts": "c386af2a3b85e97a3f4a28e3119efe6d54b2e86e9c5777241907a981321e707b",
+        "packages/extension/prompt.ts": "c6a74c3410f8621d8b09010f46cf2c8afca2a12047082f16c755c2257b3a7f39",
+        "packages/protocol/schemas.ts": "c4368e596ff5a513631c222822713ad0e0b1f7b829c3c2aba5d55fe8dd9e64f9",
+        "packages/sdk-ts/scripts/system-one/act/capture.ts": "07503cfe64474c6c4beeaf6c066a73df979ac07b064dfecc785c1e4fee1f7dcd",
+        "packages/sdk-ts/scripts/system-one/act/live.ts": "22c5d396759cd3a8b676e7d164c83c4f244d5d67202e3ffbbc768a325bb48d1c",
+        "packages/sdk-ts/scripts/system-one/act/replay.ts": "74f07bda7da38506e2e00cf3313edde3104d3490094324dcfd60e8c5ff3882ff",
+        "packages/sdk-ts/scripts/system-one/act/tasks.ts": "60d408281c7602e3b85560d53c8c9b3e12ae343ca54ff69c5f6514237dbd0422",
+        "packages/sdk-ts/scripts/system-one/act/archive.ts": "4fa93d9c3ddbfac9c37d1ba9dd3ce26ac923d6e7a94ab106b29681905aef190d",
+        "packages/sdk-ts/scripts/system-one/act/workflows.ts": "7ed948a96791d4ba59a2fe737751034ce26997e1f3eb13987e55347a8ec3e9d4",
+        "packages/sdk-ts/scripts/system-one/act/mutations.ts": "aa7a581591deadf22b839054693eb2491acbc10ce956a1654463d6518b3734a2",
+        "packages/sdk-ts/scripts/system-one/act/controls.ts": "0a7b4f20816525656b967bddd2e1f9d384fdd7a648e79da8ef1105ed4b5b8958"
+      }
+    }
+  },
+  "keyOnlySDK": true,
+  "artifacts": {
+    "action-suite-baseline-2": {
+      "manifest": "vendor-repos/system-one-corpus/runs/cleanup/2026-11-15/action-suite-baseline-2/manifest.json",
+      "sha256": "b6831d22ce2e1664a7b9534e0f0cecce351717dbcb577fbf08a40468a231000d"
+    },
+    "action-suite-final": {
+      "manifest": "vendor-repos/system-one-corpus/runs/cleanup/2026-11-15/action-suite-final/manifest.json",
+      "sha256": "17aa2b22ce0e4291c5e9896ffc3e2269c3fa28352f04ed8f35f538d5733d1af8"
+    },
+    "paired-live-decider": {
+      "manifest": "vendor-repos/system-one-corpus/runs/cleanup/2026-11-15/paired-live-decider/manifest.json",
+      "sha256": "dc8eb497a7b3c05c9535f94d89eb980b7d5489b499771af2826cbc5324bbaa33"
+    },
+    "stale-target-final": {
+      "manifest": "vendor-repos/system-one-corpus/runs/cleanup/2026-11-15/stale-target-final/manifest.json",
+      "sha256": "61116306b19dc08a2099a3ece395a03c32121a07536088908f8cec35bcbeae30"
+    },
+    "workflows-final": {
+      "manifest": "vendor-repos/system-one-corpus/runs/cleanup/2026-11-15/workflows-final/manifest.json",
+      "sha256": "516edc81d52e76c363826c04701a54e4ad73ea05813546d2cbf09e057923fb31"
+    },
+    "key-only-sdk-final": {
+      "manifest": "vendor-repos/system-one-corpus/runs/cleanup/2026-11-15/key-only-sdk-final/manifest.json",
+      "sha256": "ea76a69e0935032a75f50a9477437c4aee74a58d1d201f42493af244c7784f81"
+    }
+  },
+  "verification": {
+    "extensionAndUnderstudyTests": 1300,
+    "sdkProtocolParityTests": 1231,
+    "sdkBrowserTests": 47,
+    "referenceTests": 52,
+    "pythonGeneratedClientTests": 422,
+    "liveProviderConformance": 3,
+    "typescriptChecks": true,
+    "pythonLintTypes": true,
+    "generationConsistency": true,
+    "mintValidation": true,
+    "builds": true,
+    "preservation": {
+      "checkedRawFiles": 2419,
+      "missing": [],
+      "changed": [],
+      "trackedMarkdownFiles": 88,
+      "missingMarkdown": []
+    },
+    "finalBundleSmoke": "final-bundle-sdk-smoke",
+    "runtimeDecisionLinesBefore": 9212,
+    "runtimeDecisionLinesAfter": 4265
+  },
+  "operationFallbacks": {
+    "total": 3,
+    "passed": 3,
+    "cases": ["hover", "double-click", "drag"],
+    "excludedInvalidFixtureRun": "operation-fallbacks"
+  }
+}

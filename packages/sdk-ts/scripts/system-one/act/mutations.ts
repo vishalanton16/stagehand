@@ -20,7 +20,7 @@ writeFileSync(
       kind: "controlled-mutation-regression",
       delay,
       rounds: 2,
-      arms: ["luna", "tree", "plans"],
+      arms: ["luna", "plans"],
       cases: ["replace", "repurpose"],
       model: "pplx-decider-v1.3",
       llm: "openai/gpt-6-luna",
@@ -41,7 +41,7 @@ const browser = await localBrowser.launch({ headless: true });
 try {
   for (let round = 0; round < 2; round++)
     for (const mutation of ["replace", "repurpose"] as const) {
-      const arms = round % 2 ? ["plans", "tree", "luna"] : ["luna", "tree", "plans"];
+      const arms = round % 2 ? ["plans", "luna"] : ["luna", "plans"];
       for (const arm of arms) {
         const logs: object[] = [];
         const stagehand = await Stagehand.create({
@@ -51,7 +51,6 @@ try {
             provider: "perplexity",
             apiKey: process.env.PERPLEXITY_API_KEY!,
             model: "pplx-decider-v1.3",
-            act: arm === "plans" ? "plans" : "tree",
           },
           logging: {
             level: "info",
