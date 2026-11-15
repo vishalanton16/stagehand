@@ -9,6 +9,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heldout5Tasks } from "./heldout5.js";
 import { confirmationTasks, heldout6Tasks } from "./heldout6.js";
+import { liveCoverageTasks } from "./liveCoverageTasks.js";
+import { heldout7Tasks } from "./heldout7.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 
 process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH ??= fileURLToPath(
@@ -78,9 +80,13 @@ const cases = [
 ];
 
 const realTasks = process.env.LIVE_TASKS?.split(",").map((name) => {
-  const task = [...heldout5Tasks, ...heldout6Tasks, ...confirmationTasks].find(
-    (candidate) => candidate.name === name,
-  );
+  const task = [
+    ...heldout5Tasks,
+    ...heldout6Tasks,
+    ...heldout7Tasks,
+    ...confirmationTasks,
+    ...liveCoverageTasks,
+  ].find((candidate) => candidate.name === name);
   if (!task) throw new Error(`Unknown live task ${name}`);
   return task;
 });
@@ -114,29 +120,30 @@ let failures = 0;
 const browser = await localBrowser.launch({ headless: true });
 const arms = (process.env.LIVE_ARMS ?? "decider,luna").split(",");
 const rounds = Number(process.env.LIVE_ROUNDS ?? 2);
+const firstRound = Number(process.env.LIVE_FIRST_ROUND ?? 0);
+const fallbackModel = process.env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna";
 try {
-  for (let round = 0; round < rounds; round++) {
+  for (let round = firstRound; round < firstRound + rounds; round++) {
     const offset = round % arms.length;
     for (const arm of [...arms.slice(offset), ...arms.slice(0, offset)]) {
       const logs: unknown[] = [];
+      const llmUsage: { inputTokens: number; outputTokens: number; cachedInputTokens?: number }[] =
+        [];
+      const decisionModel = arm === "flash" ? "pplx-decider-flash-v1.3" : "pplx-decider-v1.3";
       const stagehand = await Stagehand.create({
         browser,
         model: {
           generate: (params) =>
-            generateWithOpenAI(
-              gateway,
-              process.env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna",
-              params,
-            ),
+            generateWithOpenAI(gateway, fallbackModel, params, (usage) => llmUsage.push(usage)),
         },
         experimentalDecisions: {
           provider: "perplexity",
           apiKey: process.env.PERPLEXITY_API_KEY!,
-          model: arm === "flash" ? "pplx-decider-flash-latest" : "pplx-decider-latest",
+          model: decisionModel,
           extract: "map",
         },
         logging: {
-          level: "info",
+          level: "debug",
           onLog: (event) => {
             if (event.data.category === "decisions" || event.data.category === "decisions-usage")
               logs.push(event);
@@ -148,6 +155,7 @@ try {
         for (const task of realTasks ?? cases) {
           const url = "url" in task ? task.url : `http://127.0.0.1:${address.port}/${task.name}`;
           logs.length = 0;
+          llmUsage.length = 0;
           const started = performance.now();
           let result;
           let error;
@@ -178,6 +186,9 @@ try {
               sourceHash,
               extensionHash,
               arm,
+              fallbackModel,
+              decisionModel: arm === "luna" ? undefined : decisionModel,
+              llmUsage,
               round,
               task: task.name,
               passed,

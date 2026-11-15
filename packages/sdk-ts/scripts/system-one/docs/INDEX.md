@@ -156,3 +156,15 @@ See [provider sources, results, and archive IDs](./DECISION_PRIMITIVES.md).
 The first [missing-evidence probe](./DECISION_PRIMITIVES.md#missing-evidence-check) found four wrong initial group picks and two more after retry across 30 negative runs. Field mapping caught both retry errors. Both Python docs errors passed runtime validation as incomplete lists. The retry recovered all four positive controls. The roadmap now calls for a source-coverage check before live promotion.
 
 The [source-coverage follow-up](./DECISION_PRIMITIVES.md#source-coverage-check) removed both incomplete Python results from the direct path. It preserved all four retry-only controls in the full probe. Both arms passed the 37-task paired replay with four fallbacks each. The coverage check remains a replay arm pending a fresh live comparison.
+
+### Live retry and source coverage
+
+The [live SDK comparison](./DECISION_PRIMITIVES.md#live-sdk-comparison) ran seven URLs three times per arm. Retry and source coverage reduced fallbacks from 12/21 to 7/21 and extraction p50 from 4.69 s to 1.63 s. Extraction p95 was 6.18 s versus 6.03 s for the current path and 7.72 s for Luna. Both Decision arms scored 18/21 because section filtering dropped one W3C landmark in every run. Luna scored 21/21. Keep the candidate experimental and address row coverage next.
+
+### Nested heading row fix
+
+The data view now keeps a list under its own heading when a preceding sibling has a different heading. W3C went from 0/2 to 2/2 live, with all eight rows. Both Decision arms went from 41/42 to 42/42 on frozen replay. In a separate four-page live follow-up, each arm passed 8/8 and the retry candidate used no fallback. All four successful retries came from known controls. [Row coverage results](./DECISION_PRIMITIVES.md#row-coverage-after-nested-headings)
+
+### SDK pattern decision
+
+Keep the current Decider and Luna fallback pattern with the nested-heading fix. In the [five-page fresh promotion check](./DECISION_PRIMITIVES.md#fresh-retry-promotion-check), each Decision arm scored 9/15 with the same nine fallbacks. The candidate never retried or rejected a competing source. The next experiment is exact span copying, led by SQLite function names and the GitHub qualifier regression.

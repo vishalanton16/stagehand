@@ -186,8 +186,8 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
     }
   }
 
-  const headingBefore = (node: OutlineNode): string => {
-    for (let i = node.index - 1; i >= 0; i--) {
+  const headingBefore = (node: OutlineNode, lowerBound = 0): string => {
+    for (let i = node.index - 1; i >= lowerBound; i--) {
       const candidate = nodes[i]!;
       if (lower(candidate) === "heading" && candidate.name && candidate.depth <= node.depth + 2)
         return candidate.name;
@@ -518,7 +518,11 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
             const heading = [sibling, ...descendants(sibling)].find(
               (n) => lower(n) === "heading" && n.name.trim(),
             );
-            if (heading) return clip(heading.name.trim(), 60);
+            if (heading) {
+              // A heading already inside this container takes precedence over
+              // a heading in a preceding sibling section.
+              return clip((headingBefore(record, current.index) || heading.name).trim(), 60);
+            }
             // Navigation next to a list ("More", "See all") does not label it.
             const named = [sibling, ...descendants(sibling)].filter(
               (n) => n.name.trim() && lower(n) !== "statictext",
@@ -652,9 +656,10 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
         ...group,
         id: `scope-${heading.index}-${group.id}`,
         records,
-        context: positions.map((index) =>
-          [heading.name, group.context[index]].filter(Boolean).join(" › "),
-        ),
+        context: positions.map((index) => {
+          const label = group.context[index];
+          return label && label !== heading.name ? `${heading.name} › ${label}` : heading.name;
+        }),
         sections: [heading.name],
       });
     }

@@ -2,6 +2,41 @@ import { describe, expect, it } from "vitest";
 import { buildDataView } from "../services/decisions/dataView.js";
 
 describe("nested record scopes", () => {
+  it("keeps all list rows under the heading inside their section", () => {
+    const tree = `[1] document
+  [2] section
+    [3] heading: Background
+    [4] paragraph: An overview of the document
+  [5] section
+    [6] heading: Supported modes
+    [7] paragraph: This introductory paragraph is deliberately longer than the limit for a short context label.
+    [8] list
+      [9] listitem
+        [30] StaticText: Alpha
+      [10] listitem
+        [31] StaticText: Beta
+      [11] listitem
+        [32] StaticText: Gamma
+  [12] section
+    [13] heading: Archived modes
+    [14] list
+      [15] listitem
+        [33] StaticText: Delta
+      [16] listitem
+        [34] StaticText: Epsilon
+      [17] listitem
+        [35] StaticText: Zeta`;
+    const view = buildDataView(tree, {});
+    const scoped = view.groups.find(
+      (group) =>
+        group.role === "listitem" &&
+        group.sections.length === 1 &&
+        group.sections[0] === "Supported modes",
+    );
+    expect(scoped?.records.map((row) => row.id)).toEqual(["9", "10", "11"]);
+    expect(scoped?.context).toEqual(Array(3).fill("Supported modes"));
+  });
+
   it("uses the enclosing description term as the scope for nested terms", () => {
     const view = buildDataView(
       `[1] DescriptionList

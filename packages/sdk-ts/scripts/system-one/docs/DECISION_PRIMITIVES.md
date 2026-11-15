@@ -150,3 +150,62 @@ GROUP_PROBE_EXTRACT=1 GROUP_PROBE_SOURCE_COVERAGE=1 node --env-file=.env --impor
 ```
 
 The choice-only, rich-choice, wider initial shortlist, and selected-predicate extraction arms were removed after their comparisons. The replay archives retain source and results. The provider group probe still uses choice questions to measure ranking and abstention in isolation.
+
+## Live SDK comparison
+
+Three rotated rounds over seven live URLs produced 21 scores per arm. Five tasks were new pages and two were known retry controls. Both Decision arms used pinned Decider v1.3. Luna used GPT-6 Luna through Vercel AI Gateway. The candidate ran through the public SDK against an isolated extension build that passed `source-coverage` to the extraction service. The normal extension build was restored.
+
+| Arm                                    | Passed | Wrong direct answers | Luna fallbacks | Extract p50 / p95 | End-to-end p95 | Mean input tokens | Est. USD / 1k |
+| -------------------------------------- | -----: | -------------------: | -------------: | ----------------: | -------------: | ----------------: | ------------: |
+| Current Decider + fallback             |  18/21 |                    3 |             12 |     4.69 / 6.03 s |         7.24 s |            24,709 |        $2.363 |
+| Decider with retry and source coverage |  18/21 |                    3 |              7 |     1.63 / 6.18 s |         8.45 s |            11,964 |        $1.045 |
+| Luna                                   |  21/21 |                    — |              — |     3.89 / 7.72 s |         9.11 s |            28,278 |        $2.907 |
+
+Eight candidate runs retried. Five answered directly, all on the two known controls. The three retries on the fresh Kubernetes Service page still needed Luna. Fallback p50/p95 was 5.03/8.23 s for the current path and 5.43/8.31 s for the candidate. Percentiles use nearest rank, so fallback p95 is the maximum for these small subsets. Cost estimates use reported Decision usage and the generation callback's usage, including reported cache reads.
+
+Both Decision arms omitted `banner` on every W3C run. The trace shows the correct eight-row group was selected. One row received a different context label, and section votes excluded it even though the subset question said the task wanted the whole group. This is a row coverage failure. Keep the retry and source check experimental until a section-filter change passes this regression and independent live tasks.
+
+The initial MDN Promise grader omitted the two experimental methods that the live page lists. All 63 results were rescored uniformly with the corrected reference, ignoring the trailing Experimental badge. The raw records, original and corrected graders, rescore script, patch, and extension hashes are preserved under `runs/plan-validation/live-coverage-20261114T203041Z/`. The corrected task is in `liveCoverageTasks.ts`. [MDN static methods](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise#static_methods) · [W3C landmarks](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA11)
+
+## Row coverage after nested headings
+
+The W3C snapshot showed that the first landmark row borrowed a heading from a preceding sibling section. When Stagehand projected the group into the correct heading scope, that row kept a different context from the other seven. Section votes then discarded it. The data view now prefers a preceding heading inside the current container and avoids duplicating the scope heading when it already labels a row. The section filter is still available for genuinely separate sections.
+
+| Check                                         | Before | After |
+| --------------------------------------------- | -----: | ----: |
+| Frozen list replay, current Decider           |  41/42 | 42/42 |
+| Frozen list replay, retry and source coverage |  41/42 | 42/42 |
+| W3C live regression                           |    0/2 |   2/2 |
+| HTML table and nginx live controls            |    4/4 |   4/4 |
+
+The before and after replays used identical frozen inputs in separate runs. W3C was the only wrong direct answer in each before arm. Both after arms still selected the first table from the merged six-row Web Scraper group and returned the requested three rows. Fallback counts were eight for current Decider and six for the candidate in both replays. The W3C live retest used the unmodified controller with the old and new extension builds, in reversed order for round two.
+
+Replay archives: before `a8a52570-9b62-43fa-86d8-5914eefe12b0`, after `2854c3f1-947d-4ef9-b5cf-54651f615f64`. Live results and build patches are under `runs/plan-validation/live-row-scope-20261115T040244Z/`.
+
+A follow-up used the corrected build for all arms on two fresh tasks and two known retry controls. Redis asked for the general-purpose list only. Python asked for the combinatoric iterator table only. Each task ran twice with rotated arm order. The fresh references were fixed before inference. [Redis data types](https://redis.io/docs/latest/develop/data-types/compare-data-types/) · [Python itertools](https://docs.python.org/3.12/library/itertools.html)
+
+| Live arm with row fix                  | Passed | Wrong direct answers | Luna fallbacks | Extract p50 / p95 | Est. USD / 1k |
+| -------------------------------------- | -----: | -------------------: | -------------: | ----------------: | ------------: |
+| Current Decider + fallback             |    8/8 |                    0 |              5 |     4.76 / 7.28 s |        $3.524 |
+| Decider with retry and source coverage |    8/8 |                    0 |              0 |     1.80 / 3.31 s |        $0.063 |
+| Luna                                   |    8/8 |                    — |              — |     4.08 / 4.90 s |        $4.723 |
+
+Four candidate runs retried and all four answered directly on the known controls. On the fresh Python task, the current arm abstained once while the candidate selected the right table on its initial request. That difference occurred before the retry or coverage check. The cost and tail estimates are sensitive to the small, deliberately fallback-heavy set. Its p95 is the maximum of eight. Keep the candidate in the benchmark until a wider live run measures successful retries on fresh pages and retry followed by Luna. Raw results are in `followup.jsonl` in the live archive above.
+
+## Fresh retry promotion check
+
+The row-corrected builds ran five new URLs in three rotated rounds. Tasks covered a numbered function list, a reference table, pricing cards, two competing runner tables, and revision notation with punctuation. Graders were frozen before inference.
+
+| Live SDK arm                           | Exact passes | Wrong direct answers | Luna fallbacks | Retry attempts | Extraction p50 / p95 | Mean input tokens | Est. USD / 1k |
+| -------------------------------------- | -----------: | -------------------: | -------------: | -------------: | -------------------: | ----------------: | ------------: |
+| Current Decider + fallback             |         9/15 |                    3 |              9 |              0 |        4.53 / 7.15 s |             9,385 |        $0.830 |
+| Decider with retry and source coverage |         9/15 |                    3 |              9 |              0 |        4.78 / 5.92 s |             9,384 |        $0.731 |
+| Luna                                   |        12/15 |                    — |              — |              — |        5.40 / 8.12 s |            33,110 |        $3.334 |
+
+All nine candidate fallbacks came from group disagreement. Retry is reached only after the first choice abstains. The coverage check never fired. Input use was effectively identical between the two Decision arms. With 15 observations, p95 is the maximum. The observed wall times and cost estimates cannot be attributed to retry or coverage because those paths did no work in this run.
+
+Both Decision arms selected the correct SQLite group and returned all seven function names with a trailing opening parenthesis. The instructions requested names only, so all six outputs failed. Each arm also returned the correct Neon plan names in all caps, which failed the strict title-case reference. As a diagnostic, ignoring only Neon casing gives 12/15 for each Decision arm and 15/15 for Luna. The frozen scores above stand.
+
+Keep current Decider with Luna fallback as the SDK pattern and keep the verified heading fix. Leave retry and source coverage in the benchmark. Prioritize exact extraction of grounded text spans and rejection of malformed direct results. Avoid another broad retry run until the task design can distinguish an explicit abstention from a group disagreement. [SQLite function list](https://www.sqlite.org/lang_datefunc.html) · [Neon plan names](https://neon.com/pricing)
+
+The archive includes all 45 outputs, frozen task definitions, build hashes, and the candidate wiring patch at `runs/plan-validation/live-retry-promotion-20261115T050704Z/`.
