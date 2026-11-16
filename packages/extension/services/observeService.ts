@@ -26,7 +26,7 @@ const DEFAULT_OBSERVE_INSTRUCTION =
 
 type ObserveServiceOptions = {
   params: StagehandObserveParams;
-  page: Pick<Page, "captureSnapshot"> & Partial<Pick<Page, "evaluate" | "url">>;
+  page: Pick<Page, "captureSnapshot"> & Partial<Pick<Page, "evaluate" | "url" | "frameForId">>;
   model: ModelConfig | ClientModelReference | undefined;
   clientLLMGenerate: ClientLlmRequest;
   logger: StagehandLogger;

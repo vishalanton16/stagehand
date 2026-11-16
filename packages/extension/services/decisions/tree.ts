@@ -29,6 +29,8 @@ const POINTER_ROLES = new Set([
 
 const INPUT_ROLES = new Set(["textbox", "searchbox", "combobox", "spinbutton", "textarea"]);
 
+const LABEL_ROLES = new Set(["labeltext", "label"]);
+
 const TEXT_ROLES = new Set([
   "statictext",
   "labeltext",
@@ -308,7 +310,12 @@ function followingSiblingText(nodes: OutlineNode[], node: OutlineNode): string |
     const candidate = nodes[i]!;
     if (candidate.depth < node.depth) return undefined;
     if (candidate.parent !== node.parent) continue;
-    if (candidate.name && hasRole(candidate, TEXT_ROLES)) return candidate.name;
+    if (hasRole(candidate, TEXT_ROLES)) {
+      // AX labels can own a StaticText child while having no name themselves.
+      const label =
+        candidate.name || (hasRole(candidate, LABEL_ROLES) ? textOf(nodes, candidate) : "");
+      if (label) return label;
+    }
     if (hasRole(candidate, POINTER_ROLES) || hasRole(candidate, INPUT_ROLES)) return undefined;
   }
   return undefined;
@@ -382,7 +389,12 @@ function precedingSiblingText(nodes: OutlineNode[], node: OutlineNode): string |
   for (let i = node.index - 1; i > floor && i >= node.index - 20; i--) {
     const candidate = nodes[i]!;
     if (candidate.parent !== node.parent) continue;
-    if (candidate.name && hasRole(candidate, TEXT_ROLES)) return candidate.name;
+    if (hasRole(candidate, TEXT_ROLES)) {
+      // AX labels can own a StaticText child while having no name themselves.
+      const label =
+        candidate.name || (hasRole(candidate, LABEL_ROLES) ? textOf(nodes, candidate) : "");
+      if (label) return label;
+    }
     if (hasRole(candidate, POINTER_ROLES) || hasRole(candidate, INPUT_ROLES)) return undefined;
   }
   return undefined;

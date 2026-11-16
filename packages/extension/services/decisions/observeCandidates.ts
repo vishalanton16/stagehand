@@ -55,7 +55,8 @@ export function observationView(snapshot: ObservationSnapshot) {
         role: node.role,
         name: node.name,
         ...(fact.context ? { context: fact.context } : {}),
-        ...(fact.href ? { destination: fact.href } : {}),
+        ...(fact.href ? { destination: fact.href, link_text: fact.text } : {}),
+        ...(fact.title ? { title: fact.title } : {}),
         ...(fact.tag ? { tag: fact.tag } : {}),
         ...(node.parent !== undefined ? { parent_role: nodes[node.parent]!.role } : {}),
         enabled: fact.enabled,
@@ -86,4 +87,34 @@ export function observationSignature(view: ReturnType<typeof observationView>): 
       fact: c.fact,
     })),
   });
+}
+
+export function matchesObservationType(
+  candidate: ObservationCandidate,
+  targetType: string,
+): boolean {
+  switch (targetType) {
+    case "text_link":
+      return (
+        (candidate.fact.tag === "a" || /\blink\b/i.test(candidate.node.role)) &&
+        Boolean(candidate.fact.text.trim())
+      );
+    case "link":
+      return candidate.fact.tag === "a" || /\blink\b/i.test(candidate.node.role);
+    case "button":
+      return candidate.fact.tag === "button" || /\bbutton\b/i.test(candidate.node.role);
+    case "field":
+      return (
+        candidate.fact.editable ||
+        Boolean(candidate.node.editable) ||
+        ["input", "select", "textarea"].includes(candidate.fact.tag) ||
+        /\b(textbox|searchbox|combobox|spinbutton|checkbox|radio|switch|slider|listbox)\b/i.test(
+          candidate.node.role,
+        )
+      );
+    case "heading":
+      return /\bheading\b/i.test(candidate.node.role);
+    default:
+      return true;
+  }
 }

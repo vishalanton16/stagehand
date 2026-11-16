@@ -58,9 +58,11 @@ function serve(
           ? { choice: "default", p: 0.99 }
           : key === "kind"
             ? { choice: "supported", p: 0.99 }
-            : key === "target"
-              ? { choice: q.options.find((id) => id !== "none_match"), p: 0.99 }
-              : { p: 0.99 }),
+            : key === "target_type"
+              ? { choice: "any", p: 0.99 }
+              : key === "target"
+                ? { choice: q.options.find((id) => id !== "none_match"), p: 0.99 }
+                : { p: 0.99 }),
     (mock) => vi.stubGlobal("fetch", vi.fn(mock)),
   );
 }
@@ -131,19 +133,214 @@ describe("decision observations", () => {
     const result = await selectObservation(config(), snapshot(80), "Find all fields");
     expect(result.kind === "done" && result.actions).toHaveLength(80);
     expect(JSON.stringify(seen)).toContain("match_0-91");
-    expect(seen).toHaveLength(1);
+    expect(seen).toHaveLength(2);
   });
-  it("shares membership rules without repeating them for every candidate", async () => {
+  it("does not score set membership for single-target requests", async () => {
     const seen = serve();
     const result = await selectObservation(config(), snapshot(80), "Find Field 1");
     expect(result.kind).toBe("done");
-    expect(seen).toHaveLength(1);
+    expect(seen).toHaveLength(2);
     expect(JSON.stringify(seen).match(/A similar control or a wrapper/g)).toHaveLength(1);
-    expect(JSON.stringify(seen)).toContain("match_0-91");
+    expect(JSON.stringify(seen)).not.toContain("match_0-91");
   });
-  it("escalates oversized hosted Clef Flash input before it can be truncated", async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
+  it("keeps candidates beyond the old 254 element limit", async () => {
+    const seen = serve("perplexity", (key, question) => {
+      if (key === "target")
+        return question.options.includes("0-311")
+          ? { choice: "0-311", p: 0.99 }
+          : { choice: "none_match", p: 0.99 };
+      if (key === "exists") {
+        const candidates = JSON.parse(question.text).candidates;
+        return { p: "0-311" in candidates ? 0.99 : 0.01 };
+      }
+      return undefined;
+    });
+    expect(await selectObservation(config(), snapshot(300), "Find Field 300")).toMatchObject({
+      kind: "done",
+      actions: [{ selector: "xpath=/html/body/input[300]" }],
+    });
+    expect(seen).toHaveLength(4);
+  });
+  it("does not accept an empty shard with contradictory existence evidence", async () => {
+    serve("perplexity", (key) =>
+      key === "target" ? { choice: "none_match", p: 0.99 } : undefined,
+    );
+    expect(await selectObservation(config(), snapshot(300), "Find Country")).toMatchObject({
+      kind: "fallback",
+      reason: "target_uncertain",
+    });
+  });
+  it("compares competing shard winners before returning one target", async () => {
+    const seen = serve("perplexity", (key, question) =>
+      key === "target" ? { choice: question.options[0], p: 0.99 } : undefined,
+    );
+    const result = await selectObservation(config(), snapshot(300), "Find the best matching field");
+    expect(result.kind === "done" && result.actions).toHaveLength(1);
+    expect(seen).toHaveLength(5);
+    expect(Object.keys(seen[4]!.body.questions as object)).toEqual(["target"]);
+  });
+  it("reads iframe evidence in the owning frame with local paths", async () => {
+    serve();
+    const snap = snapshot();
+    snap.formattedTree = snap.formattedTree.replaceAll("0-", "1-");
+    snap.xpathMap = { "1-12": "/html/body/iframe[1]/html/body/input[1]" };
+    snap.facts = { "1-12": snapshot().facts["0-12"]! };
+    const browser = page(snap);
+    const evaluate = vi.fn(async () => snap.facts);
+    browser.captureSnapshot.mockImplementation(async () => ({
+      combinedTree: snap.formattedTree,
+      combinedXpathMap: snap.xpathMap,
+      combinedUrlMap: {},
+      combinedEditableIds: [],
+      perFrame: [
+        {
+          frameId: "child",
+          outline: snap.formattedTree,
+          xpathMap: { "1-12": "/html/body/input[1]" },
+          urlMap: {},
+        },
+      ],
+    }));
+    const frameForId = vi.fn(() => ({ evaluate }));
+    expect(
+      await runDecisionsObserve(config(), {
+        page: { ...browser, frameForId } as never,
+        logger: logger(),
+        instruction: "Find Field 1",
+        snapshotOptions: {},
+        progress: new Progress("observe", 0),
+      }),
+    ).toMatchObject({
+      kind: "done",
+      actions: [{ selector: "xpath=/html/body/iframe[1]/html/body/input[1]" }],
+    });
+    expect(frameForId).toHaveBeenCalledWith("child");
+    expect(evaluate).toHaveBeenCalledWith(expect.any(Function), { "1-12": "/html/body/input[1]" });
+    expect(browser.evaluate).not.toHaveBeenCalled();
+  });
+  it("applies the budget to the requested kind without truncating that kind", async () => {
+    const snap = snapshot(650);
+    snap.formattedTree = snap.formattedTree.replace("textbox: Field 1", "button: Submit");
+    snap.facts["0-12"]!.tag = "button";
+    snap.facts["0-12"]!.editable = false;
+    serve("perplexity", (key) =>
+      key === "target_type" ? { choice: "button", p: 0.99 } : undefined,
+    );
+    expect(await selectObservation(config(), snap, "Find the Submit button")).toMatchObject({
+      kind: "done",
+      actions: [{ selector: "xpath=/html/body/input[1]", method: "click" }],
+    });
+  });
+  it("accounts for all set members across batches", async () => {
+    serve("perplexity", (key) => (key === "cardinality" ? { choice: "all", p: 0.99 } : undefined));
+    const result = await selectObservation(config(), snapshot(300), "Find all fields");
+    expect(result.kind === "done" && result.actions).toHaveLength(300);
+  });
+  it("does not use a rejected literal-label shortlist to prove absence", async () => {
+    serve("perplexity", (key) =>
+      key === "target"
+        ? { choice: "none_match", p: 0.99 }
+        : key === "exists"
+          ? { p: 0.01 }
+          : undefined,
+    );
+    expect(
+      await selectObservation(config(), snapshot(), 'Find "Field 1" in the billing section'),
+    ).toMatchObject({
+      kind: "fallback",
+      reason: "quoted_target_uncertain",
+    });
+  });
+  it("reads outline and editable side-channel facts without scanning hidden DOM entries", async () => {
+    serve();
+    const snap = snapshot();
+    snap.xpathMap["0-800"] = "/html/body/div[1]";
+    snap.xpathMap["0-900"] = "/html/body/div[2]";
+    snap.editableIds.push("0-900");
+    const browser = page(snap);
+    expect(
+      await runDecisionsObserve(config(), {
+        page: browser as never,
+        logger: logger(),
+        instruction: "Find Field 1",
+        snapshotOptions: {},
+        progress: new Progress("observe", 0),
+      }),
+    ).toMatchObject({ kind: "done" });
+    expect(browser.evaluate).toHaveBeenCalledWith(expect.any(Function), {
+      "0-12": "/html/body/input[1]",
+      "0-900": "/html/body/div[2]",
+    });
+  });
+  it("still falls back when a failed frame read leaves controls unrepresented", async () => {
+    serve();
+    const snap = snapshot();
+    const browser = page(snap);
+    browser.captureSnapshot.mockImplementation(async () => ({
+      combinedTree: snap.formattedTree,
+      combinedXpathMap: snap.xpathMap,
+      combinedUrlMap: {},
+      combinedEditableIds: [],
+      perFrame: [
+        { frameId: "child", outline: snap.formattedTree, xpathMap: snap.xpathMap, urlMap: {} },
+      ],
+    }));
+    expect(
+      await runDecisionsObserve(config(), {
+        page: {
+          ...browser,
+          frameForId: () => ({
+            evaluate: async () => {
+              throw new Error("detached");
+            },
+          }),
+        } as never,
+        logger: logger(),
+        instruction: "Find Field 1",
+        snapshotOptions: {},
+        progress: new Progress("observe", 0),
+      }),
+    ).toMatchObject({ kind: "fallback", reason: "unrepresented_candidates:1" });
+  });
+  it("checks the broad view before accepting absence from a role-specific view", async () => {
+    const snap = snapshot(2);
+    snap.formattedTree = snap.formattedTree.replace("textbox: Field 1", "button: Submit");
+    snap.facts["0-12"]!.tag = "button";
+    snap.facts["0-12"]!.editable = false;
+    const seen = serve("perplexity", (key) =>
+      key === "target_type"
+        ? { choice: "button", p: 0.99 }
+        : key === "target"
+          ? { choice: "none_match", p: 0.99 }
+          : key === "exists"
+            ? { p: 0.01 }
+            : undefined,
+    );
+    expect(await selectObservation(config(), snap, "Find the Refund payment button")).toEqual({
+      kind: "done",
+      actions: [],
+    });
+    expect(seen).toHaveLength(3);
+    expect(JSON.stringify(seen[2]!.body)).toContain("Field 2");
+  });
+  it("returns unsupported intent before reading DOM facts", async () => {
+    serve("perplexity", (key) =>
+      key === "operation" ? { choice: "unsupported", p: 0.99 } : undefined,
+    );
+    const browser = page(snapshot());
+    expect(
+      await runDecisionsObserve(config(), {
+        page: browser as never,
+        logger: logger(),
+        instruction: "Drag Field 1",
+        snapshotOptions: {},
+        progress: new Progress("observe", 0),
+      }),
+    ).toMatchObject({ kind: "fallback", reason: "unsupported_observation" });
+    expect(browser.evaluate).not.toHaveBeenCalled();
+  });
+  it("escalates oversized hosted Clef Flash input before selection can be truncated", async () => {
+    const seen = serve("cloudflare");
     expect(
       await selectObservation(
         { ...config(), provider: "cloudflare", accountId: "account", model: "clef-flash" },
@@ -151,7 +348,7 @@ describe("decision observations", () => {
         "Find all fields",
       ),
     ).toMatchObject({ kind: "fallback", reason: "provider_context_budget" });
-    expect(fetch).not.toHaveBeenCalled();
+    expect(seen).toHaveLength(1);
   });
   it("escalates the whole set if one member is uncertain", async () => {
     serve("perplexity", (key) =>
@@ -159,12 +356,31 @@ describe("decision observations", () => {
         ? { choice: "all", p: 0.99 }
         : key === "match_0-13"
           ? { p: 0.5 }
-          : undefined,
+          : key.startsWith("verify_")
+            ? { choice: "none_match", p: 0.5 }
+            : undefined,
     );
     expect(await selectObservation(config(), snapshot(2), "Find all fields")).toMatchObject({
       kind: "fallback",
       reason: "uncertain_set_member",
     });
+  });
+  it.each([
+    { choice: "match", count: 2 },
+    { choice: "none_match", count: 1 },
+  ])("resolves an uncertain set member with a verified $choice", async ({ choice, count }) => {
+    serve("perplexity", (key) =>
+      key === "cardinality"
+        ? { choice: "all", p: 0.99 }
+        : key === "match_0-13"
+          ? { p: 0.5 }
+          : key === "verify_0-13"
+            ? { choice, p: 0.9 }
+            : undefined,
+    );
+    const result = await selectObservation(config(), snapshot(2), "Find all fields");
+    expect(result.kind).toBe("done");
+    expect(result.kind === "done" && result.actions).toHaveLength(count);
   });
   it("distinguishes a certified empty choice from a contradictory existence answer", async () => {
     serve("perplexity", (key) =>
@@ -223,10 +439,12 @@ describe("decision observations", () => {
   [0-12] textbox: Email
   [0-3] LabelText: Work address
   [0-13] textbox: Email`;
-    const seen = serve();
+    const seen = serve("perplexity", (key) =>
+      key === "cardinality" ? { choice: "all", p: 0.99 } : undefined,
+    );
     await selectObservation(config(), snap, "Find the work email");
     const membership = JSON.parse(
-      (seen[0]!.body.questions as Record<string, { instructions: string }>)["match_0-13"]!
+      (seen[1]!.body.questions as Record<string, { instructions: string }>)["match_0-13"]!
         .instructions,
     );
     expect(membership.candidate).toMatchObject({ near_text: "Work address", occurrence: "2 of 2" });
@@ -391,7 +609,7 @@ describe("decision observations", () => {
       clientLLMGenerate: llm,
       decisions: config(),
     });
-    expect(result.metadata.usage.inputTokens).toBe(40);
+    expect(result.metadata.usage.inputTokens).toBe(80);
     expect(() => ObserveResultSchema.parse(result)).not.toThrow();
     expect(browser.captureSnapshot).toHaveBeenCalledWith(
       { focusLocator: { selector: "main" }, ignoreLocators: undefined },

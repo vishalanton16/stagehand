@@ -8,6 +8,7 @@ export type ElementFacts = {
   name: string;
   text: string;
   href?: string;
+  title?: string;
   value?: string;
   checked?: boolean;
   context: string;
@@ -34,6 +35,7 @@ export function readFacts(paths: Record<string, string>): Record<string, Element
       const disabled =
         element.matches(":disabled") || Boolean(element.closest('[inert],[aria-disabled="true"]'));
       const context = element.closest('li,tr,[role="row"],fieldset,[role="dialog"]');
+      const title = element.getAttribute("title");
       result[id] = {
         visible:
           rect.width > 0 &&
@@ -56,6 +58,7 @@ export function readFacts(paths: Record<string, string>): Record<string, Element
         tag: element.tagName.toLowerCase(),
         type: input.type ?? "",
         name: element.getAttribute("aria-label") ?? element.getAttribute("placeholder") ?? "",
+        ...(title ? { title } : {}),
         text: (element.textContent ?? "").trim().slice(0, 160),
         ...(element instanceof HTMLAnchorElement ? { href: element.href } : {}),
         ...("value" in element ? { value: String(input.value) } : {}),

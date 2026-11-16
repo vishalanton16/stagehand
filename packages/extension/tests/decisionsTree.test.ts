@@ -49,6 +49,17 @@ describe("decisions act outline parsing", () => {
     expect(describeCandidate(nodes, nodes[4]!)).toMatchObject({ near_text: "First name" });
   });
 
+  it.each(["before", "after"])("reads nested label text %s a control", (position) => {
+    const label = "  [0-2] LabelText\n    [0-3] StaticText: Country";
+    const control = "  [0-4] select";
+    const nodes = parseOutline(
+      "[0-1] form\n" + (position === "before" ? `${label}\n${control}` : `${control}\n${label}`),
+    );
+    const candidate = nodes.find((node) => node.id === "0-4")!;
+    expect(describeCandidate(nodes, candidate)).toMatchObject(
+      position === "before" ? { near_text: "Country" } : { text_after: "Country" },
+    );
+  });
   it("joins continuation lines into the previous name and numbers identical controls", () => {
     const nodes = parseOutline(
       ["[0-1] button: Add to", "cart", "[0-2] button: Add to cart"].join("\n"),
