@@ -111,13 +111,18 @@ export async function selectObservation(
       type: "noul",
       instructions: {
         question:
-          "Does this specific candidate belong in the user's requested result set? Satisfy every requested kind, name, section and scope. A similar control or a wrapper around the target does not count. Match the requested semantic and visual element kind, not merely a shared accessible name.",
+          "Does this candidate belong in the user's requested result set under membership_rules?",
         candidate: candidate.evidence,
       },
     };
   // Each membership question needs its own evidence, not every competing candidate in shared state.
   const redact = redactor(variables);
-  const state = redact ? redactDeep({ instruction }, redact) : { instruction };
+  const context = {
+    instruction,
+    membership_rules:
+      "For each match_ question, satisfy every requested kind, name, section and scope. A similar control or a wrapper around the target does not count. Match the requested semantic and visual element kind, not merely a shared accessible name.",
+  };
+  const state = redact ? redactDeep(context, redact) : context;
   const safeQuestions = redact ? redactDeep(questions, redact) : questions;
   // Hosted Clef Flash truncates beyond 24k tokens. A conservative byte bound reserves room for its prompt.
   if (

@@ -1,5 +1,9 @@
 # System One docs
 
+Latest: [fixes and remeasurement](./FIXES_RESULTS_2026-11-16.md). Preserves the original baseline, fixes measurement errors and scalar evidence loss, and records remaining failures and rejected trials.
+
+Current architecture versus ordinary Stagehand: [November 16 bench comparison](./BENCH_COMPARISON_2026-11-16.md), covering live act, cached-page SDK extraction, all available frozen extraction tasks and labeled observation replay. Includes fallback, latency, cost and eval-harness limitations.
+
 Act, extract and observe cleanup is complete. See [CLEANUP_RESULTS.md](./CLEANUP_RESULTS.md) for the retained contract and [OBSERVE_RESULTS.md](./OBSERVE_RESULTS.md) for observe measurements. Prototype flags and source paths below describe the measured pre-cleanup implementations unless stated otherwise. Historical results and caveats are preserved.
 
 Status and handoff for experimental System One support. Extraction (`extract: "map"`) uses one decision model with an LLM fallback. The new opt-in `act: "plans"` has [live action results](./ACT_RESULTS.md) and a [measurement plan](./ACT_EXPERIMENTS.md). The extraction measurements below remain separate.

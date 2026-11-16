@@ -717,7 +717,7 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
     if (!named(node) && !inline) continue;
     const leafish =
       inline || namedKids.length === 0 || ["cell", "link", "gridcell"].includes(lower(node));
-    if (!leafish || node.name.length > 400) continue;
+    if (!leafish || node.name.length > 1500) continue;
     const value = run ?? node.name;
     if (value.trim().endsWith(":")) continue;
     if (!inline && /statictext|strong|emphasis/.test(lower(node))) {

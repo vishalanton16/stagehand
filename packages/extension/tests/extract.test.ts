@@ -10,6 +10,28 @@ import * as cacheService from "../services/cacheService.js";
 import * as extractService from "../services/extractService.js";
 
 describe("extract inference", () => {
+  it("limits precision guidance to schemas requesting numbers", async () => {
+    const generate = vi.fn(async (_params: LLMGenerateParams): Promise<LLMGenerateResult> =>
+      structuredResult({ value: [] }),
+    );
+    await extract({
+      instruction: "Extract the labels",
+      domElements: "labels",
+      schema: z.object({ value: z.array(z.string()) }),
+      generate,
+    });
+    expect(generate.mock.calls[0]![0].systemPrompt).not.toContain("prefer the precise value");
+    const numeric = vi.fn(async (_params: LLMGenerateParams): Promise<LLMGenerateResult> =>
+      structuredResult({ value: 42.125 }),
+    );
+    await extract({
+      instruction: "Extract the reading",
+      domElements: "42.125",
+      schema: z.object({ value: z.number() }),
+      generate: numeric,
+    });
+    expect(numeric.mock.calls[0]![0].systemPrompt).toContain("prefer the precise value");
+  });
   it("returns validated data and usage from one structured call", async () => {
     const usage = {
       inputTokens: 10,

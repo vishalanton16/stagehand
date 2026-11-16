@@ -131,6 +131,15 @@ describe("decision observations", () => {
     const result = await selectObservation(config(), snapshot(80), "Find all fields");
     expect(result.kind === "done" && result.actions).toHaveLength(80);
     expect(JSON.stringify(seen)).toContain("match_0-91");
+    expect(seen).toHaveLength(1);
+  });
+  it("shares membership rules without repeating them for every candidate", async () => {
+    const seen = serve();
+    const result = await selectObservation(config(), snapshot(80), "Find Field 1");
+    expect(result.kind).toBe("done");
+    expect(seen).toHaveLength(1);
+    expect(JSON.stringify(seen).match(/A similar control or a wrapper/g)).toHaveLength(1);
+    expect(JSON.stringify(seen)).toContain("match_0-91");
   });
   it("escalates oversized hosted Clef Flash input before it can be truncated", async () => {
     const fetch = vi.fn();

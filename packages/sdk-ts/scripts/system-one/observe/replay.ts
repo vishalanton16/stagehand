@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import OpenAI from "openai";
 import { trace } from "@opentelemetry/api";
 import type { Action } from "@browserbasehq/stagehand-protocol/types";
@@ -16,6 +17,9 @@ const [source, dir] = process.argv.slice(2);
 if (!source || !dir) throw new Error("Expected capture directory and new result directory");
 mkdirSync(dir);
 const arms = (process.env.OBSERVE_ARMS ?? "legacy,luna").split(",");
+const beforeRoot = process.env.BENCH_BEFORE_ROOT;
+if (arms.includes("before") && !beforeRoot)
+  throw new Error("before arm requires BENCH_BEFORE_ROOT");
 const rounds = Number(process.env.OBSERVE_ROUNDS ?? 2);
 const concurrency = Number(process.env.OBSERVE_CONCURRENCY ?? 2);
 const provider = (process.env.OBSERVE_PROVIDER ?? "perplexity") as DecisionModelConfig["provider"];
@@ -64,6 +68,7 @@ archive(dir, {
   sourceManifestHash: hash(readFileSync(join(source, "manifest.json"))),
   baselineRevision: BASELINE_REVISION,
   arms,
+  beforeRoot: beforeRoot ?? null,
   rounds,
   concurrency,
   provider,
@@ -150,9 +155,18 @@ async function run(job: (typeof jobs)[number], arm: string, round: number) {
                   if (performance.now() - started > 45000) throw new Error("Replay deadline");
                 },
               })
-            : arm === "runtime"
+            : arm === "runtime" || arm === "before"
               ? await (
-                  await import("../../../../extension/services/decisions/observeSelection.js")
+                  arm === "before"
+                    ? await import(
+                        pathToFileURL(
+                          join(
+                            beforeRoot!,
+                            "packages/extension/services/decisions/observeSelection.ts",
+                          ),
+                        ).href
+                      )
+                    : await import("../../../../extension/services/decisions/observeSelection.js")
                 ).selectObservation(scopedConfig, snapshot, label.instruction)
               : await (
                   await import("./policy.js")

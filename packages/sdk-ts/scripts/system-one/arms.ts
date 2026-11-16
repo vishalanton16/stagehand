@@ -1,6 +1,8 @@
 import * as extractService from "../../../extension/services/extractService.js";
 import { generateWithOpenAI } from "../openaiStructuredGeneration.js";
 import { env } from "node:process";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { z } from "zod/v4";
 import { type ScalarReader } from "./mapCopy.js";
 import { baselineModule } from "./baseline.js";
@@ -279,14 +281,16 @@ const jev: Member = { model: "jev", rate: "jev" };
 
 /** New extraction designs under test; each is compared against the arms in replay.ts. */
 function runtimeMap(
-  model: "decider" | "flash",
+  model: "decider" | "flash" | "luna",
   {
     speculateListMapping = false,
     historicalSource = false,
+    beforeSource = false,
     experiment,
   }: {
     speculateListMapping?: boolean;
     historicalSource?: boolean;
+    beforeSource?: boolean;
     experiment?: "baseline" | "oracle" | Extract<ListGroupExperiment, string>;
   } = {},
 ): Arm {
@@ -314,7 +318,17 @@ function runtimeMap(
         speculateListMapping ||
         experiment === "oracle" ||
         experiment === "schema";
-      const service = historical ? await baselineModule("services/extractService") : extractService;
+      if (beforeSource && !env.BENCH_BEFORE_ROOT)
+        throw new Error("before arm requires BENCH_BEFORE_ROOT");
+      const service = beforeSource
+        ? await import(
+            pathToFileURL(
+              join(env.BENCH_BEFORE_ROOT!, "packages/extension/services/extractService.ts"),
+            ).href
+          )
+        : historical
+          ? await baselineModule("services/extractService")
+          : extractService;
       const result = await service.extract({
         params: {
           pageId: "replay",
@@ -331,15 +345,18 @@ function runtimeMap(
           screenshot: async () => new Uint8Array(),
         },
         model: { source: "client" },
-        decisions: {
-          ...decisionConfigs[model],
-          ...(experiment ? { model: "pplx-decider-v1.3" } : {}),
-          ...(historical ? { extract: "map" } : {}),
-          recordDecisionUsage: ({ inputTokens, outputTokens }) => {
-            count(decisionUsage, inputTokens, outputTokens);
-            count(context.usage, inputTokens, outputTokens);
-          },
-        },
+        decisions:
+          model === "luna"
+            ? undefined
+            : {
+                ...decisionConfigs[model],
+                ...(experiment ? { model: "pplx-decider-v1.3" } : {}),
+                ...(historical ? { extract: "map" } : {}),
+                recordDecisionUsage: ({ inputTokens, outputTokens }) => {
+                  count(decisionUsage, inputTokens, outputTokens);
+                  count(context.usage, inputTokens, outputTokens);
+                },
+              },
         clientLLMGenerate: (params) => {
           llmCalls++;
           context.usage.calls++;
@@ -380,6 +397,9 @@ function runtimeMap(
 }
 
 export const extraArms: Record<string, Arm> = {
+  "before-decider": runtimeMap("decider", { beforeSource: true }),
+  "before-luna": runtimeMap("luna", { beforeSource: true }),
+  "runtime-luna": runtimeMap("luna"),
   "runtime-decider": runtimeMap("decider"),
   "baseline-decider": runtimeMap("decider", { historicalSource: true }),
   "runtime-decider-speculative": runtimeMap("decider", { speculateListMapping: true }),

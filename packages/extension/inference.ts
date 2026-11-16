@@ -111,6 +111,19 @@ async function generateStructured<Schema extends z.ZodType>(
   };
 }
 
+function includesNumericSchema(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(includesNumericSchema);
+  const schema = value as Record<string, unknown>;
+  if (schema.type === "number" || schema.type === "integer") return true;
+  if (
+    Array.isArray(schema.type) &&
+    schema.type.some((type) => type === "number" || type === "integer")
+  )
+    return true;
+  return Object.values(schema).some(includesNumericSchema);
+}
+
 export async function extract<T extends z.ZodObject>(params: {
   instruction: string;
   domElements: string;
@@ -125,7 +138,14 @@ export async function extract<T extends z.ZodObject>(params: {
     generate,
     "Extraction",
     schema,
-    promptText(buildExtractSystemPrompt(false, userProvidedInstructions, Boolean(screenshot))),
+    promptText(
+      buildExtractSystemPrompt(
+        false,
+        userProvidedInstructions,
+        Boolean(screenshot),
+        includesNumericSchema(z.toJSONSchema(schema)),
+      ),
+    ),
     buildExtractUserPrompt(instruction, domElements, false, screenshot),
   );
 }

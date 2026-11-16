@@ -10,7 +10,6 @@ import {
 import type { EvalLogger } from "./logger.js";
 import { launchRunnerProvidedBrowserbaseChrome } from "./core/targets/browserbase.js";
 import { onceAsync, registerActiveRunCleanup } from "./framework/activeRunCleanup.js";
-import { EVAL_SYSTEM_PROMPT } from "./framework/evalSystemPrompt.js";
 import { resolveKey } from "./tui/welcomeStatus.js";
 
 export type InitStagehandArgs = {
@@ -162,7 +161,8 @@ export async function initStagehand({
   try {
     stagehand = await Stagehand.create({
       browser,
-      systemPrompt: EVAL_SYSTEM_PROMPT,
+      // These structured SDK operations cannot ask an operator for clarification.
+      // A generic system prompt would force decision observation into LLM fallback.
       // selfHeal defaults off on the server; without it the heal_* benchmarks
       // pass while measuring nothing.
       selfHeal: true,

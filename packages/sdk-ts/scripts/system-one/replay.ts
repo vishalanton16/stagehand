@@ -293,7 +293,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     concurrency,
     tasks: selectedTasks.map((task) => task.name),
     arms: armNames,
+    beforeRoot: env.BENCH_BEFORE_ROOT ?? null,
     fallbackModel: env.AI_GATEWAY_MODEL ?? "openai/gpt-6-luna",
+    order: "First arm rotates by task index and round; jobs execute at the configured concurrency.",
   };
   const archive = new URL(`runs/archive/${run.id}/`, CORPUS_DIR);
   mkdirSync(archive, { recursive: true });
@@ -306,10 +308,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   process.stderr.write(JSON.stringify({ run }) + "\n");
   const jobs: (() => Promise<void>)[] = [];
   for (let round = 0; round < rounds; round++) {
-    for (const task of selectedTasks) {
+    for (const [taskIndex, task] of selectedTasks.entries()) {
       const frozen = snapshots.get(task.name)!;
       const snapshotHash = hash(JSON.stringify(frozen));
-      for (const armName of armNames) {
+      const offset = (round + taskIndex) % armNames.length;
+      for (const armName of [...armNames.slice(offset), ...armNames.slice(0, offset)]) {
         const arm = availableArms[armName];
         if (!arm) throw new Error(`Unknown arm ${armName}`);
         jobs.push(async () => {

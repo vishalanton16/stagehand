@@ -28,6 +28,10 @@ import {
 import { type DecisionModelConfig, type DecisionQuestion } from "./client.js";
 import { rankGroups, describeGroup } from "./listMapping.js";
 
+// Keep the mapper and the independent reader on the same bounded evidence.
+// Short prefix previews can hide the requested fact later in a paragraph.
+const SCALAR_EVIDENCE_LIMIT = 1500;
+
 function rankFacts(view: DataView, field: Field, instruction: string): Fact[] {
   const own = tokens(fieldText(field));
   const task = tokens(instruction);
@@ -89,13 +93,13 @@ export async function readScalars(
     if (facts.length === 0) continue;
     questions[`f_${field.name}`] = {
       type: "choice",
-      instructions: `Task: ${instruction}\nWhich page text holds "${fieldText(field)}"?`,
+      instructions: `Task: ${instruction}\nWhich page text holds "${fieldText(field)}"? Prefer an explicitly stated precise value over an approximate summary of the same fact. Do not calculate or infer an unstated value.`,
       criteria: {
         ...Object.fromEntries(
           facts.map((fact, i) => {
             return [
               `t${i}`,
-              `${fact.label ? `[${clip(fact.label, 90)}] ` : ""}${clip(fact.value, 180)}`,
+              `${fact.label ? `[${clip(fact.label, 180)}] ` : ""}${clip(fact.value, SCALAR_EVIDENCE_LIMIT)}`,
             ];
           }),
         ),
@@ -240,12 +244,15 @@ function scalarReaderEvidence(fields: Field[], instruction: string, options: Map
   const scalarFields = fields.filter((field) => field.type !== "url");
   const input: ScalarReaderInput = {
     sheet: facts
-      .map((fact) => `${fact.label ? `${clip(fact.label, 90)}: ` : ""}${clip(fact.value, 300)}`)
+      .map(
+        (fact) =>
+          `${fact.label ? `${clip(fact.label, 180)}: ` : ""}${clip(fact.value, SCALAR_EVIDENCE_LIMIT)}`,
+      )
       .join("\n"),
     fields: scalarFields.map((field) => ({
       name: field.name,
       type: field.type === "string" ? "string" : "number",
-      instructions: `${instruction}\nFind the exact value for ${fieldText(field)}.`,
+      instructions: `${instruction}\nFind the exact value for ${fieldText(field)}. Prefer an explicitly stated precise value over an approximate summary of the same fact. Do not calculate or infer an unstated value.`,
     })),
   };
   return { facts, scalarFields, input };

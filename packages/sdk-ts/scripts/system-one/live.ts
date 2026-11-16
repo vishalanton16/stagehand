@@ -95,6 +95,15 @@ const codeCellControls = [
 ];
 
 const scalarControls = [
+  ...[false, true].map((approximate) => ({
+    name: approximate ? "scalar-explicit-approximate-source" : "scalar-precise-paragraph-tail",
+    html: `<h1>Gauge reading</h1><h2>Approximate guide</h2><table><tr><th>Reading</th></tr><tr><td>42</td></tr></table><h2>Detailed measurement</h2><p>${"Background information about the gauge. ".repeat(12)}The measured reading is exactly 42.125 units.</p>`,
+    instruction: approximate
+      ? "Extract the approximate reading from the Approximate guide table only."
+      : "Extract the measured reading in units as explicitly given on the page.",
+    schema: z.object({ reading: z.number() }),
+    expected: { reading: approximate ? 42 : 42.125 },
+  })),
   {
     name: "table-cell-competing-tables",
     html: "<h1>Rates</h1><h2>South division</h2><table><tr><th>Plan</th><th>Monthly fee</th></tr><tr><td>Standard</td><td>19</td></tr></table><h2>North division</h2><table><tr><th>Plan</th><th>Monthly fee</th></tr><tr><td>Standard</td><td>29</td></tr></table>",
