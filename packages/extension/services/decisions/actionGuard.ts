@@ -3,14 +3,16 @@ import type { Protocol } from "devtools-protocol";
 import { resolveLocatorWithHops } from "../../understudy/deepLocator.js";
 import type { Page } from "../../understudy/page.js";
 import type { Progress } from "../../understudy/progress.js";
+import { checkTargetInPage } from "./actionTarget.js";
 
 export async function guardActionTarget(
   page: Page,
   action: Action,
   progress: Progress,
   expectedElementId?: string,
+  expectedDestinationElementId?: string,
 ): Promise<string | undefined> {
-  const method = action.method ?? "";
+  const method = action.method?.trim() ?? "";
   if (
     ![
       "click",
@@ -27,37 +29,61 @@ export async function guardActionTarget(
     ].includes(method)
   )
     return;
-  try {
-    const locator = await resolveLocatorWithHops(page, page.mainFrame(), action.selector, progress);
-    if (expectedElementId) {
-      const actualId = `${page.getOrdinal(locator.getFrame().frameId)}-${await locator.backendNodeId(progress)}`;
-      if (actualId !== expectedElementId) return "target_replaced";
-    }
-    const session = locator.getFrame().session;
-    const { objectId } = await locator.resolveNode(progress);
+  const rejection = await checkTarget(action.selector, expectedElementId);
+  if (rejection || method !== "dragAndDrop") return rejection;
+  const destination = action.arguments?.[0];
+  if (!destination) return "drag_destination_missing";
+  const destinationRejection = await checkTarget(destination, expectedDestinationElementId);
+  return destinationRejection ? `drag_destination_${destinationRejection}` : undefined;
+
+  async function checkTarget(selector: string, expectedId?: string): Promise<string | undefined> {
     try {
-      const response = await session.send<Protocol.Runtime.CallFunctionOnResponse>(
-        "Runtime.callFunctionOn",
-        {
-          objectId,
-          functionDeclaration: actionEligibility.toString(),
-          arguments: [{ value: method }],
-          returnByValue: true,
-        },
-      );
-      if (response.exceptionDetails) return "target_check_failed";
-      const verdict = response.result.value;
-      return verdict === "ok"
-        ? undefined
-        : typeof verdict === "string"
-          ? verdict
-          : "target_check_failed";
-    } finally {
-      await session.send("Runtime.releaseObject", { objectId }).catch(() => {});
+      const locator = await resolveLocatorWithHops(page, page.mainFrame(), selector, progress);
+      const session = locator.getFrame().session;
+      const { objectId } = await locator.resolveNode(progress);
+      try {
+        // Describe the same remote object we probe; resolving the selector again can inspect a replacement.
+        if (expectedId) {
+          const { node } = await progress.run("checking action target identity", () =>
+            session.send<Protocol.DOM.DescribeNodeResponse>("DOM.describeNode", { objectId }),
+          );
+          const actualId = `${page.getOrdinal(locator.getFrame().frameId)}-${node.backendNodeId}`;
+          if (actualId !== expectedId) return "target_replaced";
+        }
+        const response = await progress.run("checking action target eligibility", () =>
+          session.send<Protocol.Runtime.CallFunctionOnResponse>("Runtime.callFunctionOn", {
+            objectId,
+            functionDeclaration: actionEligibility.toString(),
+            arguments: [{ value: method }],
+            returnByValue: true,
+          }),
+        );
+        if (response.exceptionDetails) return "target_check_failed";
+        const verdict = response.result.value;
+        if (verdict !== "ok") return typeof verdict === "string" ? verdict : "target_check_failed";
+        if (["click", "doubleClick", "hover", "dragAndDrop"].includes(method)) {
+          const hit = await progress.run("checking action pointer target", () =>
+            session.send<Protocol.Runtime.CallFunctionOnResponse>("Runtime.callFunctionOn", {
+              objectId,
+              functionDeclaration: checkTargetInPage.toString(),
+              arguments: [{ value: true }],
+              awaitPromise: true,
+              returnByValue: true,
+            }),
+          );
+          if (hit.exceptionDetails) return "target_check_failed";
+          const hitVerdict = hit.result.value?.verdict;
+          if (hitVerdict !== "ok")
+            return typeof hitVerdict === "string" ? `target_${hitVerdict}` : "target_check_failed";
+        }
+        return undefined;
+      } finally {
+        await progress.cleanup(() => session.send("Runtime.releaseObject", { objectId }));
+      }
+    } catch {
+      progress.throwIfStopped();
+      return "target_unresolved";
     }
-  } catch {
-    progress.throwIfStopped();
-    return "target_unresolved";
   }
 }
 

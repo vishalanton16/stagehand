@@ -37,7 +37,7 @@ export function observationView(snapshot: ObservationSnapshot) {
       while (parent !== undefined) {
         const ancestor = nodes[parent]!;
         const host = snapshot.facts[ancestor.id];
-        if (host && (host.editable || host.tag === "select")) break;
+        if (host && ["input", "textarea", "select"].includes(host.tag)) break;
         parent = ancestor.parent;
       }
       if (parent === undefined) unresolved.push(node.id);
@@ -51,10 +51,9 @@ export function observationView(snapshot: ObservationSnapshot) {
       selector: `xpath=${path}`,
       fact,
       evidence: {
+        ...full,
         role: node.role,
         name: node.name,
-        ...(full.within ? { within: full.within } : {}),
-        ...(full.under_heading ? { heading: full.under_heading } : {}),
         ...(fact.context ? { context: fact.context } : {}),
         ...(fact.href ? { destination: fact.href } : {}),
         ...(fact.tag ? { tag: fact.tag } : {}),
@@ -65,7 +64,7 @@ export function observationView(snapshot: ObservationSnapshot) {
       },
     });
   }
-  return { candidates, unresolved };
+  return { candidates, unresolved, url: snapshot.url };
 }
 
 export function isInteractive(candidate: ObservationCandidate) {
@@ -78,6 +77,7 @@ export function isInteractive(candidate: ObservationCandidate) {
 
 export function observationSignature(view: ReturnType<typeof observationView>): string {
   return JSON.stringify({
+    url: view.url,
     unresolved: view.unresolved,
     candidates: view.candidates.map((c) => ({
       id: c.node.id,

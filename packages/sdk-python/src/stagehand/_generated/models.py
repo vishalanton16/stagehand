@@ -16,6 +16,7 @@ from pydantic import (
     StrictStr,
 )
 from stagehand._validation import (
+    ExperimentalDecisionsConfigValidation,
     PageScreenshotOptionsValidation,
     StagehandInitParamsValidation,
     TelemetryConfigValidation,
@@ -610,24 +611,26 @@ class EmptyParams(WireModel):
     )
 
 
-class ExperimentalDecisionsConfig(WireModel):
+class ExperimentalDecisionsConfig(ExperimentalDecisionsConfigValidation):
     """Experimental decision models for act(), observe() and extract(), with automatic LLM fallback. Defaults to Perplexity Decider v1.3."""
 
     model_config = ConfigDict(
         extra="forbid",
         validate_by_name=True,
+        arbitrary_types_allowed=True,
     )
     provider: Optional[Provider] = None
     """Decision-model provider: Perplexity Decider (default), TypeSafe Jev, or Cloudflare Clef"""
     api_key: Annotated[StrictStr, Field(min_length=1)]
     model: Annotated[Optional[StrictStr], Field(min_length=1)] = None
-    api_url: Annotated[Optional[StrictStr], Field(pattern="^https:\\/\\/[^\\s?#]+$")] = (
-        None
-    )
+    api_url: Annotated[
+        Optional[WireUrl],
+        Field(pattern="^https:\\/\\/[^/\\\\\\s?#]+(?:\\/[^\\\\\\s?#]*)?$"),
+    ] = None
     account_id: Annotated[Optional[StrictStr], Field(pattern="^[A-Za-z0-9_-]{1,64}$")] = (
         None
     )
-    """Cloudflare account id; required for provider "cloudflare\""""
+    """Cloudflare account ID; required unless apiUrl supplies the account-scoped base URL"""
 
 
 class ExternalProxyConfig(WireModel):

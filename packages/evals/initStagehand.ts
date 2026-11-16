@@ -10,6 +10,7 @@ import {
 import type { EvalLogger } from "./logger.js";
 import { launchRunnerProvidedBrowserbaseChrome } from "./core/targets/browserbase.js";
 import { onceAsync, registerActiveRunCleanup } from "./framework/activeRunCleanup.js";
+import { EVAL_SYSTEM_PROMPT } from "./framework/evalSystemPrompt.js";
 import { resolveKey } from "./tui/welcomeStatus.js";
 
 export type InitStagehandArgs = {
@@ -78,31 +79,6 @@ export async function initStagehand({
     );
   }
 
-  const useDecisions = process.env.EVAL_DECISIONS === "1";
-  const decisionsObserve = useDecisions && process.env.EVAL_DECISIONS_OBSERVE === "1";
-  const decisionsExtract = useDecisions && process.env.EVAL_DECISIONS_EXTRACT === "1";
-  let experimentalDecisions: StagehandCreateOptions["experimentalDecisions"];
-  if (useDecisions) {
-    const keyNames = {
-      typesafe: "TYPESAFE_API_KEY",
-      cloudflare: "CLOUDFLARE_AUTH_TOKEN",
-      perplexity: "PERPLEXITY_API_KEY",
-    } as const;
-    const requested = process.env.EVAL_DECISIONS_PROVIDER ?? "perplexity";
-    if (!(requested in keyNames)) throw new Error(`Unknown EVAL_DECISIONS_PROVIDER "${requested}"`);
-    const provider = requested as keyof typeof keyNames;
-    const apiKey = resolveKey(keyNames[provider]).value;
-    if (!apiKey) throw new Error(`EVAL_DECISIONS=1 requires ${keyNames[provider]}`);
-    if (provider === "cloudflare" && !process.env.CLOUDFLARE_ACCOUNT_ID)
-      throw new Error("Cloudflare requires CLOUDFLARE_ACCOUNT_ID");
-    experimentalDecisions = {
-      provider,
-      apiKey,
-      ...(provider === "cloudflare" ? { accountId: process.env.CLOUDFLARE_ACCOUNT_ID } : {}),
-      ...(process.env.EVAL_DECISIONS_MODEL ? { model: process.env.EVAL_DECISIONS_MODEL } : {}),
-    };
-  }
-
   // `browser` is a factory-built handle rather than a config object:
   // StagehandBrowser is branded (#2517), so an object literal cannot satisfy it.
   let browser;
@@ -161,23 +137,13 @@ export async function initStagehand({
   try {
     stagehand = await Stagehand.create({
       browser,
-      // These structured SDK operations cannot ask an operator for clarification.
-      // A generic system prompt would force decision observation into LLM fallback.
+      systemPrompt: EVAL_SYSTEM_PROMPT,
       // selfHeal defaults off on the server; without it the heal_* benchmarks
       // pass while measuring nothing.
       selfHeal: true,
       model: { modelName, apiKey } as NonNullable<StagehandCreateOptions["model"]>,
       logging: { onLog: createStagehandOnLog(logger) },
-      ...(experimentalDecisions ? { experimentalDecisions } : {}),
     });
-    if (useDecisions) {
-      // Tasks call stagehand.act()/observe()/extract(); in this arm those calls are the
-      // namespace's, so the same task files measure both paths.
-      const decisions = stagehand.experimentalDecisions;
-      stagehand.act = decisions.act.bind(decisions);
-      if (decisionsObserve) stagehand.observe = decisions.observe.bind(decisions);
-      if (decisionsExtract) stagehand.extract = decisions.extract.bind(decisions);
-    }
   } catch (error) {
     await cleanup();
     throw error;

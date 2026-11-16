@@ -1,5 +1,6 @@
 import { runDecisionsExtract } from "./decisions/extract.js";
 import type { DecisionsConfig } from "./decisions/config.js";
+import { withDecisionUsage } from "./decisions/usage.js";
 import { z } from "zod/v4";
 import type {
   ClientModelReference,
@@ -64,20 +65,7 @@ async function extractWithProgress(
   progress: Progress,
 ): Promise<ExtractResult> {
   const { instruction, options } = params;
-  if (decisions) {
-    const recordDecisionUsage = decisions.recordDecisionUsage;
-    decisions = {
-      ...decisions,
-      signal: progress.signal,
-      recordDecisionUsage: (usage) => {
-        recordDecisionUsage?.(usage);
-        logger.info("Decision model usage", {
-          category: "decisions-usage",
-          ...usage,
-        });
-      },
-    };
-  }
+  decisions = withDecisionUsage(decisions, progress.signal, logger);
 
   // Cache keys contain DOM state, not screenshot pixels. Do not serve a
   // visual extraction from a cache entry that cannot represent its image.
@@ -113,7 +101,7 @@ async function extractWithProgress(
     progress.throwIfStopped();
 
     const { combinedTree, combinedUrlMap } = snapshot;
-    let nativeUsage = zeroStagehandResultUsage();
+    let decisionUsage = zeroStagehandResultUsage();
     const screenshot = options?.screenshot
       ? await page.screenshot({ fullPage: false, type: "png" }, progress)
       : undefined;
@@ -125,7 +113,8 @@ async function extractWithProgress(
     });
 
     const schema = z.fromJSONSchema(params.schema as Parameters<typeof z.fromJSONSchema>[0]);
-    if (decisions && instruction && !screenshot) {
+    // Custom policy can require transformations the evidence mapper cannot represent.
+    if (decisions && instruction && !screenshot && !systemPrompt) {
       const outcome = await runDecisionsExtract(decisions, {
         instruction,
         schema: params.schema,
@@ -133,12 +122,12 @@ async function extractWithProgress(
         progress,
         logger,
       });
-      nativeUsage = outcome.usage;
+      decisionUsage = outcome.usage;
       if (outcome.kind === "done")
         return {
           result: {
             data: outcome.data,
-            metadata: { usage: nativeUsage, cache: disabledCacheMetadata() },
+            metadata: { usage: decisionUsage, cache: disabledCacheMetadata() },
           },
           cacheValue: outcome.data,
           llmUsage: { inputTokens: 0, outputTokens: 0, llmDurationMs: 0 },
@@ -218,11 +207,11 @@ async function extractWithProgress(
         data: z.json().parse(output),
         metadata: {
           usage: {
-            inputTokens: inputTokens + nativeUsage.inputTokens,
-            outputTokens: outputTokens + nativeUsage.outputTokens,
+            inputTokens: inputTokens + decisionUsage.inputTokens,
+            outputTokens: outputTokens + decisionUsage.outputTokens,
             reasoningTokens,
             cachedInputTokens,
-            inferenceTimeMs: durationMs + nativeUsage.inferenceTimeMs,
+            inferenceTimeMs: durationMs + decisionUsage.inferenceTimeMs,
           },
           cache: disabledCacheMetadata(),
         },

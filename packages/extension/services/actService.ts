@@ -13,7 +13,6 @@ import {
   performUnderstudyMethod,
   waitForDomNetworkQuiet,
 } from "../handlers/handlerUtils/actHandlerUtils.js";
-import { resolveVariableValue } from "../handlers/handlerUtils/variables.js";
 import * as inference from "../inference.js";
 import type { ClientLlmRequest } from "../llm/clientLlmClient.js";
 import type { GatewayContext } from "../llm/gatewayClient.js";
@@ -28,7 +27,10 @@ import { trimTrailingTextNode } from "../utils.js";
 import * as cacheService from "./cacheService.js";
 import { runDecisionsAct } from "./decisions/act.js";
 import type { DecisionsConfig } from "./decisions/config.js";
+import { withDecisionUsage } from "./decisions/usage.js";
 import { guardActionTarget } from "./decisions/actionGuard.js";
+import { readFacts } from "./decisions/actionFacts.js";
+import { substituteVariables } from "./decisions/args.js";
 import * as llmService from "./llmService.js";
 import { disabledCacheMetadata, zeroStagehandResultUsage } from "./resultUsage.js";
 
@@ -46,6 +48,7 @@ type ActContext = {
   progress: Progress;
   gateway?: GatewayContext;
   decisions?: DecisionsConfig;
+  snapshotOptions: Parameters<Page["captureSnapshot"]>[0];
   recordUsage: (response: ActInferenceResponse) => void;
 };
 
@@ -89,20 +92,12 @@ async function actWithProgress(
 ): Promise<ActResult> {
   const { instruction: actInstruction, options } = params;
   const decisionUsage = zeroStagehandResultUsage();
-  if (decisions) {
-    const record = decisions.recordDecisionUsage;
-    decisions = {
-      ...decisions,
-      signal: progress.signal,
-      recordDecisionUsage: (usage) => {
-        decisionUsage.inputTokens += usage.inputTokens;
-        decisionUsage.outputTokens += usage.outputTokens;
-        record?.(usage);
-        logger.info("Decision model usage", { category: "decisions-usage", ...usage });
-      },
-    };
-  }
+  decisions = withDecisionUsage(decisions, progress.signal, logger, decisionUsage);
   const variables = options?.variables;
+  const snapshotOptions = {
+    focusLocator: options?.locator,
+    ignoreLocators: options?.ignoreLocators,
+  };
   let operationUsage = zeroStagehandResultUsage();
   const recordUsage = (response: ActInferenceResponse): void => {
     operationUsage = aggregateUsage(operationUsage, usageFromInference(response));
@@ -118,6 +113,7 @@ async function actWithProgress(
     progress,
     gateway,
     decisions,
+    snapshotOptions,
     recordUsage,
   };
 
@@ -134,10 +130,6 @@ async function actWithProgress(
   }
 
   const instruction = actInstruction;
-  const snapshotOptions = {
-    focusLocator: options?.locator,
-    ignoreLocators: options?.ignoreLocators,
-  };
   await waitForDomNetworkQuiet(page.mainFrame(), logger, domSettleTimeoutMs, progress);
   progress.throwIfStopped();
 
@@ -241,6 +233,7 @@ async function actWithProgress(
       variables,
       context,
       expectedElementId: firstInference.expectedElementId,
+      expectedDestinationElementId: firstInference.expectedDestinationElementId,
     });
 
     if (!firstInference.response.twoStep || (decisions && !firstResult.success)) {
@@ -285,6 +278,7 @@ async function actWithProgress(
       variables,
       context,
       expectedElementId: secondInference.expectedElementId,
+      expectedDestinationElementId: secondInference.expectedDestinationElementId,
     });
 
     return actResult(
@@ -352,7 +346,17 @@ async function getActionFromLLM({
   domElements: string;
   xpathMap: Record<string, string>;
   context: ActContext;
-}): Promise<{ action?: Action; expectedElementId?: string; response: ActInferenceResponse }> {
+}): Promise<{
+  action?: Action;
+  expectedElementId?: string;
+  expectedDestinationElementId?: string;
+  response: ActInferenceResponse;
+}> {
+  const facts = context.decisions
+    ? await context.progress.run("reading fallback action evidence", () =>
+        context.page.evaluate(readFacts, xpathMap),
+      )
+    : undefined;
   const response = await context.progress.run("waiting for act inference", () =>
     inference.act({
       instruction,
@@ -384,16 +388,38 @@ async function getActionFromLLM({
     ? normalizeActInferenceElement(response.element, xpathMap, context.logger)
     : undefined;
   if (!action || !response.element) return { response };
-  const originalPath = xpathMap[response.element.elementId];
-  const targetPath = action.selector.slice("xpath=".length);
   // Text-node inference executes on its parent element. Compare the parent's
   // snapshot identity, not the backend ID of the text node it contains.
-  const expectedElementId =
-    originalPath === targetPath
-      ? response.element.elementId
-      : (Object.entries(xpathMap).find(([, path]) => path === targetPath)?.[0] ??
-        response.element.elementId);
-  return { action, expectedElementId, response };
+  const expectedId = (id: string, selector: string): string => {
+    const targetPath = selector.slice("xpath=".length);
+    return xpathMap[id] === targetPath
+      ? id
+      : (Object.entries(xpathMap).find(([, path]) => path === targetPath)?.[0] ?? id);
+  };
+  const expectedElementId = expectedId(response.element.elementId, action.selector);
+  const expectedDestinationElementId =
+    action.method === SupportedUnderstudyAction.DRAG_AND_DROP &&
+    response.element.arguments[0] &&
+    action.arguments?.[0]
+      ? expectedId(response.element.arguments[0], action.arguments[0])
+      : undefined;
+  if (facts) {
+    const paths = Object.fromEntries(
+      [expectedElementId, expectedDestinationElementId]
+        .filter((id): id is string => !!id && !!facts[id])
+        .map((id) => [id, xpathMap[id]!]),
+    );
+    if (Object.keys(paths).length) {
+      const current = await context.progress.run("revalidating fallback action evidence", () =>
+        context.page.evaluate(readFacts, paths),
+      );
+      if (
+        Object.keys(paths).some((id) => JSON.stringify(current[id]) !== JSON.stringify(facts[id]))
+      )
+        return { response };
+    }
+  }
+  return { action, expectedElementId, expectedDestinationElementId, response };
 }
 
 async function takeDeterministicAction({
@@ -401,11 +427,13 @@ async function takeDeterministicAction({
   variables,
   context,
   expectedElementId,
+  expectedDestinationElementId,
 }: {
   action: Action;
   variables?: Variables;
   context: ActContext;
   expectedElementId?: string;
+  expectedDestinationElementId?: string;
 }): Promise<ActResultData> {
   context.progress.throwIfStopped();
   const method = action.method?.trim();
@@ -435,6 +463,7 @@ async function takeDeterministicAction({
       action,
       context.progress,
       expectedElementId,
+      expectedDestinationElementId,
     );
     if (
       rejection &&
@@ -517,7 +546,7 @@ async function selfHealAction({
   try {
     context.progress.throwIfStopped();
     const { combinedTree, combinedXpathMap } = await context.page.captureSnapshot(
-      {},
+      context.decisions ? context.snapshotOptions : {},
       context.progress,
     );
     const inferenceResult = await getActionFromLLM({
@@ -527,7 +556,7 @@ async function selfHealAction({
       context,
     });
 
-    if (!inferenceResult.response.element) {
+    if (!inferenceResult.response.element || (context.decisions && !inferenceResult.action)) {
       return {
         success: false,
         message: "Failed to self-heal act: No observe results found for action",
@@ -537,13 +566,28 @@ async function selfHealAction({
     }
 
     const selector = inferenceResult.action?.selector ?? action.selector;
+    // A healed drag needs both fresh selectors. Text arguments retain the caller's original values.
+    if (context.decisions && method === SupportedUnderstudyAction.DRAG_AND_DROP) {
+      if (inferenceResult.action?.method !== method)
+        return {
+          success: false,
+          message: "Failed to self-heal act: No drag target found",
+          actionDescription: actionInstruction,
+          actions: [],
+        };
+      resolvedArgs = inferenceResult.action.arguments ?? [];
+      placeholderArgs = [...resolvedArgs];
+    }
     context.progress.throwIfStopped();
     if (context.decisions) {
       const rejection = await guardActionTarget(
         context.page,
-        { ...action, method, selector },
+        { ...action, method, selector, arguments: placeholderArgs },
         context.progress,
         inferenceResult.expectedElementId,
+        method === SupportedUnderstudyAction.DRAG_AND_DROP
+          ? inferenceResult.expectedDestinationElementId
+          : undefined,
       );
       if (rejection)
         return {
@@ -553,7 +597,7 @@ async function selfHealAction({
           actions: [],
         };
     }
-    attempted = { ...action, method, selector };
+    attempted = { ...action, method, selector, arguments: placeholderArgs };
     await performUnderstudyMethod(
       context.page,
       context.page.mainFrame(),
@@ -624,13 +668,7 @@ function substituteVariablesInArguments(
 ): string[] | undefined {
   if (!variables || !Array.isArray(args)) return args;
 
-  return args.map((arg) => {
-    let output = arg;
-    for (const [key, value] of Object.entries(variables)) {
-      output = output.split(`%${key}%`).join(resolveVariableValue(value));
-    }
-    return output;
-  });
+  return args.map((arg) => substituteVariables(arg, variables));
 }
 
 function successfulActionResult(

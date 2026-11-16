@@ -4,7 +4,7 @@ import type { Page } from "../../understudy/page.js";
 import type { Progress } from "../../understudy/progress.js";
 import { resolveLocatorWithHops } from "../../understudy/deepLocator.js";
 import { trimTrailingTextNode } from "../../utils.js";
-import { actionNodes, choosePlan } from "./actionPlans.js";
+import { actionNodes, choosePlan, evidence } from "./actionPlans.js";
 import { readFacts } from "./actionFacts.js";
 import { checkSelectedTarget } from "./actionTarget.js";
 import { redactor, substituteVariables } from "./args.js";
@@ -82,6 +82,24 @@ export async function runDecisionsAct(
     if (
       !current[plan.nodeId] ||
       JSON.stringify(current[plan.nodeId]) !== JSON.stringify(facts[plan.nodeId])
+    )
+      return { kind: "fallback", reason: "action_plan_evidence_changed" };
+    // AX labels and surrounding headings can change without changing the selected element's DOM facts.
+    const refreshed = await deps.page.captureSnapshot(deps.snapshotOptions, deps.progress);
+    const refreshedView = {
+      ...view,
+      formattedTree: refreshed.combinedTree,
+      xpathMap: refreshed.combinedXpathMap,
+      editableIds: refreshed.combinedEditableIds ?? [],
+      facts: { ...facts, ...current },
+    };
+    const refreshedNodes = actionNodes(refreshedView);
+    const refreshedTarget = refreshedNodes.find((node) => node.id === plan.nodeId);
+    if (
+      !refreshedTarget ||
+      refreshed.combinedXpathMap[plan.nodeId] !== view.xpathMap[plan.nodeId] ||
+      JSON.stringify(evidence(refreshedView, refreshedNodes, refreshedTarget, true)) !==
+        JSON.stringify(plan.evidence)
     )
       return { kind: "fallback", reason: "action_plan_evidence_changed" };
     deps.progress.throwIfStopped();

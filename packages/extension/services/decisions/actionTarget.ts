@@ -14,15 +14,18 @@ export async function checkSelectedTarget(
 ): Promise<GuardResult> {
   try {
     const locator = await resolveLocatorWithHops(page, page.mainFrame(), selector, progress);
-    const actualId = `${page.getOrdinal(locator.getFrame().frameId)}-${await locator.backendNodeId(progress)}`;
-    if (actualId !== expectedId) return { verdict: "other_node" };
     const session = locator.getFrame().session;
     const { objectId } = await locator.resolveNode(progress);
     try {
+      const { node } = await progress.run("checking selected action identity", () =>
+        session.send<Protocol.DOM.DescribeNodeResponse>("DOM.describeNode", { objectId }),
+      );
+      const actualId = `${page.getOrdinal(locator.getFrame().frameId)}-${node.backendNodeId}`;
+      if (actualId !== expectedId) return { verdict: "other_node" };
       const response = await progress.run("checking selected action target", () =>
         session.send<Protocol.Runtime.CallFunctionOnResponse>("Runtime.callFunctionOn", {
           objectId,
-          functionDeclaration: targetGuard.toString(),
+          functionDeclaration: checkTargetInPage.toString(),
           arguments: [{ value: pointer }],
           awaitPromise: true,
           returnByValue: true,
@@ -32,7 +35,7 @@ export async function checkSelectedTarget(
         ? { verdict: "probe_failed" }
         : (response.result.value ?? { verdict: "no_verdict" });
     } finally {
-      await session.send("Runtime.releaseObject", { objectId }).catch(() => {});
+      await progress.cleanup(() => session.send("Runtime.releaseObject", { objectId }));
     }
   } catch {
     progress.throwIfStopped();
@@ -40,7 +43,7 @@ export async function checkSelectedTarget(
   }
 }
 
-function targetGuard(this: Element, pointer: boolean): Promise<GuardResult> {
+export function checkTargetInPage(this: Element, pointer: boolean): Promise<GuardResult> {
   // oxlint-disable-next-line typescript/no-this-alias -- runs in the page with the element as `this`
   const element = this;
   const place = (): string => {
@@ -72,15 +75,15 @@ function targetGuard(this: Element, pointer: boolean): Promise<GuardResult> {
         // elementFromPoint return null; the document's answer is then the
         // cover (or the host chain, which counts as "hits the target").
         const hit = root.elementFromPoint(x, y) ?? document.elementFromPoint(x, y);
-        const encloses = (outer: Element, inner: Element): boolean => {
-          for (let node: Node | null = inner; node;) {
-            if (node === outer || (node instanceof Element && outer.contains(node))) return true;
-            const rootNode = node.getRootNode();
-            node = rootNode instanceof ShadowRoot ? rootNode.host : null;
+        if (!hit) return out("no_hit");
+        const isShadowHost = (outer: Element): boolean => {
+          for (let rootNode = element.getRootNode(); rootNode instanceof ShadowRoot;) {
+            if (outer === rootNode.host) return true;
+            rootNode = rootNode.host.getRootNode();
           }
           return false;
         };
-        if (hit && hit !== element && !element.contains(hit) && !encloses(hit, element)) {
+        if (hit !== element && !element.contains(hit) && !isShadowHost(hit)) {
           const label =
             hit.getAttribute("aria-label") ??
             hit.getAttribute("id") ??

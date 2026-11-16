@@ -295,9 +295,10 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
         cells.some((cell) => lower(cell) === "columnheader" && cell.name) ||
         (row === rows[0] &&
           cells.length > 1 &&
+          cells.some((cell) => textOf(cell).trim()) &&
           cells
-            .filter((c) => c.name)
-            .every((c) => descendants(c).some((d) => lower(d) === "strong")));
+            .filter((cell) => textOf(cell).trim())
+            .every((cell) => descendants(cell).some((d) => lower(d) === "strong")));
       if (!isHeader) break;
       headerRow = row;
     }
@@ -319,6 +320,7 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
       .join(" ");
 
   const isHeaderRecord = (record: OutlineNode) => {
+    if (!/^(row|layouttablerow|tr)$/.test(lower(record))) return false;
     const cells = children[record.index]!.map((i) => nodes[i]!).filter(
       (n) => named(n) || descendants(n).some(named),
     );
@@ -365,7 +367,7 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
       );
       if (period) {
         const leaders: OutlineNode[] = [];
-        for (let i = 0; i + period <= records.length; i += period) {
+        for (let i = 0; i < records.length; i += period) {
           leaders.push(records[i]!);
           followers.set(records[i]!.index, records.slice(i + 1, i + period));
         }
@@ -381,7 +383,7 @@ export function buildDataView(tree: string, urlMap: Record<string, string>): Dat
       for (const v of values)
         for (const key of v.keys()) counts.set(key, (counts.get(key) ?? 0) + 1);
       const common = [...counts].filter(([, n]) => n / records.length >= 0.6).map(([key]) => key);
-      if (common.length >= 1) {
+      if (/^(row|layouttablerow|tr)$/.test(group.role) && common.length >= 1) {
         records = records.filter((record, i) => {
           const share = common.filter((key) => values[i]!.has(key)).length / common.length;
           if (common.length >= 2 ? share >= 0.34 : share > 0) return true;
@@ -813,7 +815,7 @@ export function clip(text: string, max: number): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
-/** Value of `slot` in `record`, falling back to the nearest ancestor slot present. */
+/** Read the mapped slot exactly. An ancestor can contain unrelated field values. */
 export function readSlot(
   view: DataView,
   record: OutlineNode,
@@ -829,27 +831,19 @@ export function readSlot(
     return row ? readSlot(view, row, follower[2] || ".") : undefined;
   }
   const segments = key === "." ? [] : key.split("/");
-  for (let depth = segments.length; depth >= 0; depth--) {
-    let current: OutlineNode | undefined = record;
-    for (const segment of segments.slice(0, depth)) {
-      const match = /^(.+)\[(\d+)\]$/.exec(segment);
-      if (!match || !current) {
-        current = undefined;
-        break;
-      }
-      const [, role, ordinal] = match;
-      const kids = view.children[current.index]!.map((i) => view.nodes[i]!).filter(
-        (n) => n.role.toLowerCase() === role,
-      );
-      current = kids[Number(ordinal) - 1];
-    }
-    const run = current && !current.name.trim() ? view.runs.get(current.index) : undefined;
-    if (current && run) return { ...current, name: run };
-    if (current && (current.name.trim() || depth === 0)) {
-      if (current.name.trim()) return current;
-    }
+  let current: OutlineNode | undefined = record;
+  for (const segment of segments) {
+    const match = /^(.+)\[(\d+)\]$/.exec(segment);
+    if (!match || !current) return undefined;
+    const [, role, ordinal] = match;
+    const kids = view.children[current.index]!.map((i) => view.nodes[i]!).filter(
+      (n) => n.role.toLowerCase() === role,
+    );
+    current = kids[Number(ordinal) - 1];
   }
-  return undefined;
+  if (!current) return undefined;
+  const run = !current.name.trim() ? view.runs.get(current.index) : undefined;
+  return run ? { ...current, name: run } : current.name.trim() ? current : undefined;
 }
 
 export function recordText(view: DataView, record: OutlineNode, max = 160): string {

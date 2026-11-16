@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupActiveRunResources } from "../framework/activeRunCleanup.js";
+import { EVAL_SYSTEM_PROMPT } from "../framework/evalSystemPrompt.js";
 import { initStagehand } from "../initStagehand.js";
 import type { EvalLogger } from "../logger.js";
 
@@ -26,9 +27,6 @@ describe("native Stagehand evaluation initialization", () => {
   const browser = { close: vi.fn() };
   const stagehand = {
     close: vi.fn(),
-    act: vi.fn(),
-    observe: vi.fn(),
-    experimentalDecisions: { act: vi.fn(), observe: vi.fn(), extract: vi.fn() },
     browser: { context: { activePage: vi.fn() } },
   };
   const releaseSession = vi.fn();
@@ -62,25 +60,10 @@ describe("native Stagehand evaluation initialization", () => {
 
   afterEach(async () => {
     await cleanupActiveRunResources();
-    vi.unstubAllEnvs();
-  });
-
-  it("routes decision observation without the harness prompt that would force fallback", async () => {
-    vi.stubEnv("EVAL_DECISIONS", "1");
-    vi.stubEnv("EVAL_DECISIONS_OBSERVE", "1");
-    vi.stubEnv("EVAL_DECISIONS_PROVIDER", "perplexity");
-    mocks.resolveKey.mockReturnValue({ value: "test-key", source: "process-env" });
-    await initStagehand({ logger, modelName: "openai/gpt-6-astra", environment: "LOCAL" });
-    expect(mocks.create.mock.calls[0]![0]).not.toHaveProperty("systemPrompt");
-    expect(mocks.create.mock.calls[0]![0].experimentalDecisions).toMatchObject({
-      provider: "perplexity",
-    });
-    await stagehand.observe("Find Submit");
-    expect(stagehand.experimentalDecisions.observe).toHaveBeenCalledWith("Find Submit");
   });
 
   it.each(["LOCAL", "BROWSERBASE"] as const)(
-    "keeps structured SDK operations on their default policy through %s initialization",
+    "passes the shared system prompt through %s initialization and preserves cleanup",
     async (environment) => {
       const result = await initStagehand({
         logger,
@@ -92,6 +75,7 @@ describe("native Stagehand evaluation initialization", () => {
         browser,
         selfHeal: true,
         model: { modelName: "openai/gpt-6-astra", apiKey: "test-model-key" },
+        systemPrompt: EVAL_SYSTEM_PROMPT,
         logging: { onLog: expect.any(Function) },
       });
       expect(result.stagehand).toBe(stagehand);
@@ -134,7 +118,9 @@ describe("native Stagehand evaluation initialization", () => {
         initStagehand({ logger, modelName: "openai/gpt-6-astra", environment: "BROWSERBASE" }),
       ).rejects.toBe(error);
 
-      expect(mocks.create.mock.calls[0]![0]).not.toHaveProperty("systemPrompt");
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ systemPrompt: EVAL_SYSTEM_PROMPT }),
+      );
       expect(browser.close).toHaveBeenCalledOnce();
       expect(releaseSession).toHaveBeenCalledOnce();
       expect(stagehand.close).not.toHaveBeenCalled();

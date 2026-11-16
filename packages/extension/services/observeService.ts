@@ -19,6 +19,7 @@ import * as llmService from "./llmService.js";
 import { disabledCacheMetadata, zeroStagehandResultUsage } from "./resultUsage.js";
 import { runDecisionsObserve } from "./decisions/observe.js";
 import type { DecisionsConfig } from "./decisions/config.js";
+import { withDecisionUsage } from "./decisions/usage.js";
 
 const DEFAULT_OBSERVE_INSTRUCTION =
   "Find elements that can be used for any future actions in the page. These may be navigation links, related pages, section/subsection links, buttons, or other interactive elements. Be comprehensive: if there are multiple elements that may be relevant for future actions, return all of them.";
@@ -60,19 +61,7 @@ async function observeWithProgress(
   const { instruction, options } = params;
   const effectiveInstruction = instruction ?? DEFAULT_OBSERVE_INSTRUCTION;
   const decisionUsage = zeroStagehandResultUsage();
-  if (decisions) {
-    const record = decisions.recordDecisionUsage;
-    decisions = {
-      ...decisions,
-      signal: progress.signal,
-      recordDecisionUsage: (usage) => {
-        decisionUsage.inputTokens += usage.inputTokens;
-        decisionUsage.outputTokens += usage.outputTokens;
-        record?.(usage);
-        logger.info("Decision model usage", { category: "decisions-usage", ...usage });
-      },
-    };
-  }
+  decisions = withDecisionUsage(decisions, progress.signal, logger, decisionUsage);
   logger.info("Starting observation", {
     category: "observation",
     instruction: effectiveInstruction,

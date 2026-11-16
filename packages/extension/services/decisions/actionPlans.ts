@@ -37,9 +37,24 @@ export function actionNodes(snapshot: ActionSnapshot): OutlineNode[] {
   const nodes = parseOutline(snapshot.formattedTree);
   markEditable(nodes, snapshot.editableIds);
   const ids = new Set(nodes.map((node) => node.id));
+  const roots = nodes.filter((node) => node.parent === undefined);
   const order = new Map(Object.keys(snapshot.xpathMap).map((id, index) => [id, index]));
   const recovered = Object.entries(snapshot.facts)
-    .filter(([id, fact]) => fact.editableRoot && !ids.has(id) && snapshot.xpathMap[id])
+    .filter(([id, fact]) => {
+      const path = snapshot.xpathMap[id];
+      // Scoped snapshots retain the frame's DOM map. Only recover editors inside the outline's scope.
+      return (
+        fact.editableRoot &&
+        !ids.has(id) &&
+        path &&
+        roots.some((root) => {
+          const rootPath = snapshot.xpathMap[root.id];
+          return (
+            rootPath && (rootPath === "/" || path === rootPath || path.startsWith(`${rootPath}/`))
+          );
+        })
+      );
+    })
     .map(([id, fact]) => {
       const path = snapshot.xpathMap[id]!;
       const ancestors = nodes.filter((node) => path.startsWith(`${snapshot.xpathMap[node.id]}/`));

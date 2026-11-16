@@ -1,13 +1,4 @@
-/**
- * One client for every decision-model provider (see providers.ts for the
- * wire formats). Raw fetch rather than vendor SDKs: this runs inside the
- * extension service worker.
- *
- * What is shared here, so each provider behaves the same to the pipeline:
- * request timeout, retry on overload, a circuit breaker per endpoint + key,
- * splitting requests that exceed a provider's question limit, aliasing ids a
- * provider would reject, and validating every answer before it is trusted.
- */
+// Uses fetch because provider SDKs cannot run in the extension service worker.
 import {
   providerFor,
   type DecisionAnswer,
@@ -19,6 +10,7 @@ import {
   type DecisionQuestion,
   type JsonValue,
 } from "./providers.js";
+import { settleAll } from "./concurrency.js";
 
 export type { DecisionModelConfig } from "./providers.js";
 
@@ -95,7 +87,7 @@ export async function decide(
   const startedAt = Date.now();
   // A choice among one option has one possible answer (a softmax over one
   // option is 1). Providers reject or waste tokens on it, so it never leaves.
-  const settled: Record<string, DecisionAnswer> = {};
+  const settled: Record<string, DecisionAnswer> = Object.create(null);
   for (const [key, question] of Object.entries(questions)) {
     if (question.type !== "choice") continue;
     const options = Object.keys(question.criteria);
@@ -109,7 +101,7 @@ export async function decide(
       };
     }
   }
-  const keys = Object.keys(questions).filter((key) => !(key in settled));
+  const keys = Object.keys(questions).filter((key) => !Object.hasOwn(settled, key));
   const chunks: string[][] = [];
   for (let start = 0; start < keys.length; start += provider.maxQuestions) {
     chunks.push(keys.slice(start, start + provider.maxQuestions));
@@ -124,7 +116,7 @@ export async function decide(
   }
 
   // Keep each chunk on the same evidence. Packing can affect providers with cross-field attention.
-  const parts = await Promise.all(
+  const parts = await settleAll(
     chunks.map((chunk) =>
       requestOnce(
         config,
@@ -136,10 +128,10 @@ export async function decide(
   );
   return {
     model: parts[0]!.model,
-    answers: Object.assign({}, settled, ...parts.map((part) => part.answers)) as Record<
-      string,
-      DecisionAnswer
-    >,
+    answers: Object.fromEntries([
+      ...Object.entries(settled),
+      ...parts.flatMap((part) => Object.entries(part.answers)),
+    ]),
     usage: {
       inputTokens: parts.reduce((sum, part) => sum + part.usage.inputTokens, 0),
       outputTokens: parts.reduce((sum, part) => sum + part.usage.outputTokens, 0),
@@ -168,12 +160,17 @@ function text(value: JsonValue): JsonValue {
 function prepare(provider: DecisionProvider, questions: Record<string, DecisionQuestion>): Aliases {
   const keyOf = new Map<string, string>();
   const optionOf = new Map<string, Map<string, string>>();
-  const prepared: Record<string, DecisionQuestion> = {};
+  const prepared: Record<string, DecisionQuestion> = Object.create(null);
+  const reservedKeys = new Set(Object.keys(questions));
   const flatten = (value: JsonValue): JsonValue => (provider.structuredText ? value : text(value));
   let index = 0;
   for (const [key, question] of Object.entries(questions)) {
-    const wireKey = provider.safeId.test(key) ? key : `q${index}`;
-    index++;
+    let wireKey = key;
+    if (!provider.safeId.test(key)) {
+      do wireKey = `q${index++}`;
+      while (reservedKeys.has(wireKey));
+      reservedKeys.add(wireKey);
+    }
     keyOf.set(wireKey, key);
     if (question.type === "locate") {
       prepared[wireKey] = { type: "locate", instructions: flatten(question.instructions) };
@@ -197,7 +194,7 @@ function prepare(provider: DecisionProvider, questions: Record<string, DecisionQ
     const options = new Map<string, string>();
     const ids = Object.keys(question.criteria);
     const aliasAll = ids.some((id) => !provider.safeId.test(id));
-    const criteria: Record<string, JsonValue> = {};
+    const criteria: Record<string, JsonValue> = Object.create(null);
     ids.forEach((id, position) => {
       const wireId = aliasAll ? `o${position}` : id;
       options.set(wireId, id);
@@ -278,7 +275,7 @@ function validate(
   const original = (wireId: unknown): string | undefined =>
     typeof wireId === "string" ? options?.get(wireId) : undefined;
   const choice = original(answer.choice) ?? bad("choice is not one of the options");
-  const probabilities: Record<string, number> = {};
+  const probabilities: Record<string, number> = Object.create(null);
   const listed =
     answer.probabilities && typeof answer.probabilities === "object"
       ? Object.entries(answer.probabilities as Record<string, unknown>)
@@ -333,6 +330,7 @@ async function requestOnce(
 
   for (let attempt = 1; ; attempt++) {
     let response: Response;
+    let responseBody: string;
     try {
       config.signal?.throwIfAborted();
       const timeout = AbortSignal.timeout(provider.defaultTimeoutMs);
@@ -342,6 +340,9 @@ async function requestOnce(
         headers: request.headers,
         body,
       });
+      responseBody = await response.text();
+      config.signal?.throwIfAborted();
+      timeout.throwIfAborted();
     } catch (error) {
       config.signal?.throwIfAborted();
       failed();
@@ -354,12 +355,13 @@ async function requestOnce(
     }
 
     if (response.ok) {
-      // A 2xx with a body that is not the documented shape (an intermediary's
-      // HTML, a truncated response) or with answers that do not fit the
-      // questions must surface as a typed error, not as something the
-      // pipeline acts on. It also counts as a failure: a provider returning
-      // nonsense is an outage too.
-      const decoded = provider.decode(await response.json().catch(() => undefined));
+      let payload: unknown;
+      try {
+        payload = JSON.parse(responseBody);
+      } catch {
+        // Intermediaries can return HTML or truncated JSON with a successful status.
+      }
+      const decoded = provider.decode(payload);
       if (!decoded) {
         failed();
         throw new DecisionRequestError(
@@ -372,14 +374,14 @@ async function requestOnce(
         provider: provider.name,
         model: decoded.model || config.model || provider.defaultModel,
       });
-      const answers: Record<string, DecisionAnswer> = {};
+      const answers: Record<string, DecisionAnswer> = Object.create(null);
       try {
         for (const [wireKey, key] of aliases.keyOf) {
           answers[key] = validate(
             provider,
             key,
             questions[key]!,
-            decoded.answers[wireKey],
+            Object.hasOwn(decoded.answers, wireKey) ? decoded.answers[wireKey] : undefined,
             aliases.optionOf.get(key),
             state,
           );
@@ -398,7 +400,7 @@ async function requestOnce(
         Number.isFinite(retryAfter) && retryAfter > 0
           ? Math.min(retryAfter * 1000, MAX_RETRY_AFTER_MS)
           : 250 * 2 ** (attempt - 1);
-      await new Promise((resolve) => setTimeout(resolve, wait));
+      await waitForRetry(wait, config.signal);
       continue;
     }
 
@@ -413,12 +415,28 @@ async function requestOnce(
       breaker.failures = 0;
     }
     // Only the provider's error code reaches logs, never the raw body.
-    const detail = provider.errorCode(await response.text().catch(() => ""));
+    const detail = provider.errorCode(responseBody);
     throw new DecisionRequestError(
       `${provider.label} decision request failed (${response.status}${detail ? `: ${detail}` : ""})`,
       response.status,
     );
   }
+}
+
+function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 export function choiceAnswer(response: DecisionResponse, key: string): DecisionChoiceAnswer {

@@ -1,6 +1,6 @@
 import type { Progress } from "../../understudy/progress.js";
 import type { DecisionsConfig } from "./config.js";
-import type { ScalarReader } from "./mapCopy.js";
+import type { ScalarReader } from "./extractionShared.js";
 import { providerFor } from "./providers.js";
 import { decide, locateAnswer } from "./client.js";
 

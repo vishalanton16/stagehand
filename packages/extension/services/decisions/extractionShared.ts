@@ -113,7 +113,7 @@ export function numberCandidates(text: string): { value: number; shown: string }
 }
 
 const NUMBER =
-  /(?<![\p{L}\d])[-+]?\$?\d[\d,]*(?:\.\d+)?(?![\d.,]\d)(?:(k|m|bn?)|\s?(thousand|million|billion))?(?!-?\p{L})/giu;
+  /(?<![\p{L}\d.])[-+]?\$?(?:\d[\d,]*(?:\.\d+)?|\.\d+)(?:e[-+]?\d+)?(?![\d.,]\d)(?:(k|m|bn?)|\s?(thousand|million|billion))?(?!-?\p{L})/giu;
 
 const UNITS: Record<string, number> = {
   k: 1e3,
@@ -206,9 +206,7 @@ export function describeSlot(slot: Slot, field?: Field): string {
     .map((sample) => `"${clip(sample, 90)}"`)
     .join(" | ");
   const sparse =
-    slot.coverage < 0.5
-      ? ` (only on ${Math.round(slot.coverage * 100)}% of items, applies to the items after it)`
-      : "";
+    slot.coverage < 0.5 ? ` (present on ${Math.round(slot.coverage * 100)}% of items)` : "";
   return `${slot.label ? `column "${slot.label}", ` : ""}e.g. ${samples}${sparse}`;
 }
 
@@ -218,8 +216,7 @@ function stripLabel(text: string, field: Field, fromList = false): string {
   const match = prefix.exec(text);
   if (!match) return text;
   const label = match[1]!.trim();
-  if (overlap(tokens(label), tokens(fieldText(field))) > 0 || label.split(/\s+/).length <= 3)
-    return match[2]!.trim();
+  if (overlap(tokens(label), tokens(fieldText(field))) > 0) return match[2]!.trim();
   return text;
 }
 

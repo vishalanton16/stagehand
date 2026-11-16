@@ -101,17 +101,18 @@ function record(value: unknown): Record<string, unknown> | undefined {
 
 function usageOf(payload: Record<string, unknown>): DecodedResponse["usage"] {
   const usage = record(payload.usage) ?? {};
-  const number = (value: unknown): number => (typeof value === "number" ? value : 0);
+  const tokenCount = (value: unknown): number =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
   return {
-    inputTokens: number(usage.input_tokens ?? usage.prompt_tokens),
-    outputTokens: number(usage.output_tokens ?? usage.completion_tokens),
+    inputTokens: tokenCount(usage.input_tokens ?? usage.prompt_tokens),
+    outputTokens: tokenCount(usage.output_tokens ?? usage.completion_tokens),
   };
 }
 
 /** `{ model, answers: { key: answer }, usage }`, optionally inside Workers AI's `{ result }` envelope. */
 function decodeSystemOne(payload: unknown): DecodedResponse | undefined {
   const outer = record(payload);
-  const body = outer && record(outer.result) ? record(outer.result)! : outer;
+  const body = record(outer?.result) ?? outer;
   const answers = body && record(body.answers);
   if (!body || !answers) return undefined;
   return {
@@ -203,9 +204,9 @@ const PROVIDERS: Record<DecisionProviderName, DecisionProvider> = {
 };
 
 export function providerFor(config: DecisionModelConfig): DecisionProvider {
-  const provider = PROVIDERS[config.provider ?? "perplexity"];
-  if (!provider) {
+  const name = config.provider ?? "perplexity";
+  if (!Object.hasOwn(PROVIDERS, name)) {
     throw new Error(`experimentalDecisions: unknown provider "${String(config.provider)}"`);
   }
-  return provider;
+  return PROVIDERS[name];
 }

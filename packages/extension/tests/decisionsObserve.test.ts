@@ -185,6 +185,52 @@ describe("decision observations", () => {
       kind: "fallback",
     });
   });
+  it("requires a confident absence choice before accepting an empty result", async () => {
+    serve("perplexity", (key) =>
+      key === "target"
+        ? { choice: "none_match", p: 0.6 }
+        : key === "exists"
+          ? { p: 0.01 }
+          : undefined,
+    );
+    expect(await selectObservation(config(), snapshot(), "Find Country")).toMatchObject({
+      kind: "fallback",
+      reason: "target_uncertain",
+    });
+  });
+  it.each([
+    { member: 0.01, exists: 0.99 },
+    { member: 0.99, exists: 0.01 },
+  ])("rejects contradictory set existence: %j", async ({ member, exists }) => {
+    serve("perplexity", (key) =>
+      key === "cardinality"
+        ? { choice: "all", p: 0.99 }
+        : key === "exists"
+          ? { p: exists }
+          : key.startsWith("match_")
+            ? { p: member }
+            : undefined,
+    );
+    expect(await selectObservation(config(), snapshot(), "Find all fields")).toMatchObject({
+      kind: "fallback",
+      reason: "set_existence_disagrees",
+    });
+  });
+  it("includes sibling labels and occurrence numbers in candidate evidence", async () => {
+    const snap = snapshot(2);
+    snap.formattedTree = `[0-1] RootWebArea: Contact
+  [0-2] LabelText: Personal address
+  [0-12] textbox: Email
+  [0-3] LabelText: Work address
+  [0-13] textbox: Email`;
+    const seen = serve();
+    await selectObservation(config(), snap, "Find the work email");
+    const membership = JSON.parse(
+      (seen[0]!.body.questions as Record<string, { instructions: string }>)["match_0-13"]!
+        .instructions,
+    );
+    expect(membership.candidate).toMatchObject({ near_text: "Work address", occurrence: "2 of 2" });
+  });
   it("redacts previously visible variable values and retains placeholders in fill proposals", async () => {
     const snap = snapshot();
     snap.facts["0-12"]!.context = "Account secret@example.test";
@@ -220,6 +266,23 @@ describe("decision observations", () => {
       reason: "unrepresented_candidates:1",
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it("does not omit an unresolved button nested in a contenteditable region", async () => {
+    const snap = snapshot();
+    snap.formattedTree += "\n    [0-99] button: Editor options";
+    snap.facts["0-12"]!.tag = "div";
+    expect(await selectObservation(config(), snap, undefined)).toMatchObject({
+      kind: "fallback",
+      reason: "unrepresented_candidates:1",
+    });
+  });
+  it("allows browser-owned controls to be represented by their native input", async () => {
+    const snap = snapshot();
+    snap.formattedTree += "\n    [0-99] button: Increment";
+    expect(await selectObservation(config(), snap, undefined)).toMatchObject({
+      kind: "done",
+      actions: [{ selector: "xpath=/html/body/input[1]", method: "fill" }],
+    });
   });
   it("discovers controls without model inference", async () => {
     const fetch = vi.fn();
@@ -258,6 +321,41 @@ describe("decision observations", () => {
         page: page(snapshot(), snapshot(2)) as never,
         logger: logger(),
         instruction: "Find Field 2",
+        snapshotOptions: {},
+        progress: new Progress("observe", 0),
+      }),
+    ).toMatchObject({ kind: "fallback", reason: "observation_evidence_changed" });
+  });
+  it("revalidates sibling labels before returning a selected target", async () => {
+    serve();
+    const before = snapshot();
+    before.formattedTree = before.formattedTree.replace(
+      "  [0-12]",
+      "  [0-2] LabelText: Personal address\n  [0-12]",
+    );
+    const after = { ...before, formattedTree: before.formattedTree.replace("Personal", "Work") };
+    expect(
+      await runDecisionsObserve(config(), {
+        page: page(before, after) as never,
+        logger: logger(),
+        instruction: "Find the personal address",
+        snapshotOptions: {},
+        progress: new Progress("observe", 0),
+      }),
+    ).toMatchObject({ kind: "fallback", reason: "observation_evidence_changed" });
+  });
+  it("invalidates observations when navigation preserves the control tree", async () => {
+    serve();
+    const browser = page(snapshot());
+    browser.url = () =>
+      browser.captureSnapshot.mock.calls.length > 1
+        ? "https://contact.test/next"
+        : "https://contact.test/";
+    expect(
+      await runDecisionsObserve(config(), {
+        page: browser as never,
+        logger: logger(),
+        instruction: "Find Field 1",
         snapshotOptions: {},
         progress: new Progress("observe", 0),
       }),

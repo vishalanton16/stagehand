@@ -1520,15 +1520,21 @@ export const ExperimentalDecisionsConfigSchema = z
     apiKey: z.string().min(1),
     model: z.string().min(1).optional(),
     apiUrl: z
-      .string()
-      // A regex (not a refine) so the constraint reaches the generated JSON schema and SDK types.
-      .regex(/^https:\/\/[^\s?#]+$/, "apiUrl must be https, without query or fragment")
+      .url({ protocol: /^https$/, error: "apiUrl must be https, without query or fragment" })
+      .regex(
+        /^https:\/\/[^/\\\s?#]+(?:\/[^\\\s?#]*)?$/,
+        "apiUrl must be https, without query or fragment",
+      )
+      .meta({ format: "uri" })
       .optional(),
     accountId: z
       .string()
       .regex(/^[A-Za-z0-9_-]{1,64}$/)
       .optional()
-      .meta({ description: 'Cloudflare account id; required for provider "cloudflare"' }),
+      .meta({
+        description:
+          "Cloudflare account ID; required unless apiUrl supplies the account-scoped base URL",
+      }),
   })
   .refine((config) => config.provider !== "cloudflare" || !!config.accountId || !!config.apiUrl, {
     message: "Cloudflare decisions require accountId or an account-scoped apiUrl",
@@ -1538,6 +1544,9 @@ export const ExperimentalDecisionsConfigSchema = z
     id: "ExperimentalDecisionsConfig",
     description:
       "Experimental decision models for act(), observe() and extract(), with automatic LLM fallback. Defaults to Perplexity Decider v1.3.",
+    if: { properties: { provider: { const: "cloudflare" } }, required: ["provider"] },
+    // oxlint-disable-next-line unicorn/no-thenable -- JSON Schema conditional keyword.
+    then: { anyOf: [{ required: ["accountId"] }, { required: ["apiUrl"] }] },
   });
 
 export const StagehandInitParamsSchema = z

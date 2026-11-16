@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { basename, extname, relative, resolve, sep } from "node:path";
+import { extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import python from "@ast-grep/lang-python";
 import { Lang, parse, registerDynamicLanguage, type SgNode } from "@ast-grep/napi";
@@ -178,7 +178,6 @@ const SDK_OBJECTS = [
   {
     className: "ExperimentalDecisions",
     classSlug: "experimental-decisions",
-    goClassName: "ExperimentalDecisions",
     typescriptFile: "experimentalDecisions.ts",
     pythonFile: "experimental_decisions.py",
   },
@@ -2171,21 +2170,8 @@ function readReferenceTab(view: MdxNode, filePath: string): ReferenceTab {
 // they carry no signature to check against the SDK.
 const NON_METHOD_SECTIONS = new Set(["Quick start", "Properties"]);
 
-// Go methods cannot take type parameters, so an object's generic callable is a package-level
-// function named <Object><Method>, such as ExperimentalDecisionsExtract. It is that object's
-// <method>; its reference heading keeps the full Go name.
-function goMethodSlug(name: string, goClassName: string | undefined): string {
-  const method =
-    goClassName && name.length > goClassName.length && name.startsWith(goClassName)
-      ? name.slice(goClassName.length)
-      : name;
-  return snakeCase(method).replaceAll("_", "-");
-}
-
 function readReferenceMethods(view: MdxNode, filePath: string): ReferenceMethod[] {
   const children = view.children ?? [];
-  const classSlug = basename(filePath, ".mdx");
-  const goClassName = SDK_OBJECTS.find((object) => object.classSlug === classSlug)?.goClassName;
   return children.flatMap((child, index): ReferenceMethod[] => {
     if (child.type !== "heading" || child.depth !== 2) return [];
     const heading = mdxText(child).trim();
@@ -2217,7 +2203,7 @@ function readReferenceMethods(view: MdxNode, filePath: string): ReferenceMethod[
     return [
       {
         methodName,
-        methodSlug: goMethodSlug(methodName, goClassName),
+        methodSlug: snakeCase(methodName).replaceAll("_", "-"),
         paramFields,
         paramPaths: paramFields.map(({ key }) => key),
         responseFields,

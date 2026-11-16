@@ -1272,8 +1272,17 @@ async def test_create_forwards_experimental_decisions_to_init_params(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_config",
+    [
+        {"provider": "typesafe"},
+        {"provider": "cloudflare", "api_key": "key"},
+        {"api_key": "key", "api_url": "https://[bad"},
+    ],
+)
 async def test_create_omits_unset_experimental_decisions_and_rejects_invalid_config(
     monkeypatch: pytest.MonkeyPatch,
+    invalid_config: dict[str, object],
 ) -> None:
     recording = _recording()
     _install_rpc_client(monkeypatch, recording)
@@ -1282,7 +1291,7 @@ async def test_create_omits_unset_experimental_decisions_and_rejects_invalid_con
     with pytest.raises(ValueError, match="experimental_decisions"):
         await Stagehand.create(
             browser=browser,
-            experimental_decisions=cast(ExperimentalDecisionsConfig, {"provider": "typesafe"}),
+            experimental_decisions=cast(ExperimentalDecisionsConfig, invalid_config),
         )
     assert recording.calls == []
 

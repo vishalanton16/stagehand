@@ -16,7 +16,7 @@ import {
   convert,
 } from "./extractionShared.js";
 import { type DecisionQuestion, type DecisionModelConfig } from "./client.js";
-import { type OutlineNode } from "./tree.js";
+import { type OutlineNode } from "./outline.js";
 
 export function rankGroups(view: DataView, list: ListPlan, instruction: string): Group[] {
   const wanted = tokens(
@@ -114,6 +114,12 @@ function buildListMapping(view: DataView, list: ListPlan, instruction: string, g
         [NONE]: "Not present in the items",
       },
     };
+    const sparse = slots.filter((option) => option.slot.coverage < 0.5);
+    if (!list.scalarItems && sparse.length)
+      questions[`inherit_${field.name}`] = {
+        type: "noul",
+        instructions: `Task: ${instruction}\nIs "${fieldText(field)}" a shared heading or label that applies to subsequent items in the same section when it is not repeated? Do not inherit values stated only for an individual item, including optional facts. Sparse parts: ${sparse.map((option) => option.description).join("; ")}`,
+      };
   }
   const counts = countOptions(instruction);
   if (counts.length) {
@@ -352,13 +358,12 @@ export async function readList(
           ]),
         ),
       );
-      const kept = window.filter(({ index }) => noulOf(check.answers, `r${index}`) >= 0.5);
-      if (kept.length >= count) records = kept;
+      records = window.filter(({ index }) => noulOf(check.answers, `r${index}`) >= 0.5);
     }
     if (records.length < count)
       problem(trace, `count-short:${list.name}:${records.length}/${count}`);
     records = records.slice(0, count);
-  } else if (subset && !(bySection && records.length < group.records.length)) {
+  } else if (subset) {
     const third = await ask(
       config,
       { task: instruction },
@@ -424,7 +429,14 @@ export async function readList(
   const missing = new Map<string, number>();
   const carried = new Map<string, string | number | undefined>();
   const carriedSources = new Map<string, string>();
-  const items = records.map(({ record }) => {
+  let previousContext: string | undefined;
+  const items = records.map(({ record, index }) => {
+    const context = group.context[index] ?? "";
+    if (context !== previousContext) {
+      carried.clear();
+      carriedSources.clear();
+      previousContext = context;
+    }
     const item: Record<string, unknown> = {};
     for (const field of list.fields) {
       const slot = mapping.get(field.name);
@@ -449,13 +461,18 @@ export async function readList(
               )
             : slot
               ? position.has(field.name)
-                ? (numberCandidates(readSlot(view, record, slot.key)?.name ?? "")[
+                ? numberCandidates(readSlot(view, record, slot.key)?.name ?? "")[
                     position.get(field.name)!
-                  ]?.value ?? convert(view, readSlot(view, record, slot.key), field, true))
+                  ]?.value
                 : convert(view, readSlot(view, record, slot.key), field, true)
               : undefined;
       let sourceId = slot ? readSlot(view, record, slot.key)?.id : undefined;
-      if (slot && slot.coverage < 0.5 && !list.scalarItems) {
+      if (
+        slot &&
+        slot.coverage < 0.5 &&
+        !list.scalarItems &&
+        noulOf(answers, `inherit_${field.name}`) >= 0.8
+      ) {
         if (value === undefined) {
           value = carried.get(field.name);
           sourceId = carriedSources.get(field.name);

@@ -25,6 +25,7 @@ import {
   describeSlot,
   convert,
 } from "./extractionShared.js";
+import { settleAll } from "./concurrency.js";
 import { type DecisionModelConfig, type DecisionQuestion } from "./client.js";
 import { rankGroups, describeGroup } from "./listMapping.js";
 
@@ -140,12 +141,12 @@ export async function readScalars(
     };
   }
   const readerTrace: TraceEntry[] = [];
-  const [answers, read] = await Promise.all([
+  const [answers, read] = await settleAll([
     Object.keys(questions).length
       ? ask(config, { task: instruction }, questions).then((result) => result.answers)
       : {},
     reader ? readFromSheet(reader, fields, instruction, options, readerTrace) : {},
-  ]);
+  ] as const);
 
   const data: Record<string, unknown> = {};
   const ambiguous: Record<string, DecisionQuestion> = {};
@@ -292,12 +293,6 @@ async function readFromSheet(
   for (const field of scalarFields) {
     const raw = answers[field.name];
     if (raw === null || raw === undefined || raw === "") continue;
-    const sources = facts.filter((fact) =>
-      typeof raw === "number"
-        ? numberCandidates(fact.value).some((candidate) => candidate.value === raw)
-        : normal(fact.value).includes(normal(raw)),
-    );
-    if (!sources.length) continue;
     const value =
       field.type === "string"
         ? String(raw).trim()
@@ -305,6 +300,12 @@ async function readFromSheet(
           ? raw
           : parseNumber(raw, tokens(fieldText(field)));
     if (value === undefined) continue;
+    const sources = facts.filter((fact) =>
+      typeof value === "number"
+        ? numberCandidates(fact.value).some((candidate) => candidate.value === value)
+        : normal(fact.value).includes(normal(value)),
+    );
+    if (!sources.length) continue;
     data[field.name] = value;
     trace.push({
       step: `${field.name}:reader`,

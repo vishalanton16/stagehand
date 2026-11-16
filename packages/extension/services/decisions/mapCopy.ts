@@ -1,6 +1,7 @@
 import { type DecisionModelConfig } from "./client.js";
 import { type JsonSchema, plan } from "./extractionSchema.js";
 import { type TraceEntry, type ScalarReader } from "./extractionShared.js";
+import { settleAll } from "./concurrency.js";
 import { buildDataView } from "./dataView.js";
 import { readScalars } from "./scalarMapping.js";
 import { readList } from "./listMapping.js";
@@ -27,14 +28,14 @@ export async function mapCopyExtract(
   const view = buildDataView(tree, urlMap);
   // With one list and no other work in flight, a rejected group can fall back immediately.
   const stopOnDisagreement = lists.length === 1 && scalars.length === 0;
-  const [scalarData, listData] = await Promise.all([
+  const [scalarData, listData] = await settleAll([
     scalars.length
       ? readScalars(config, view, scalars, instruction, trace, reader)
       : Promise.resolve({}),
-    Promise.all(
+    settleAll(
       lists.map((list) => readList(config, view, list, instruction, trace, stopOnDisagreement)),
     ),
-  ]);
+  ] as const);
   const data: Record<string, unknown> = { ...scalarData };
   lists.forEach((list, index) => {
     const items = listData[index];
@@ -45,10 +46,10 @@ export async function mapCopyExtract(
     data[list.name] = items;
   });
   const problems = structuralProblems({ lists, scalars }, data, trace);
-  return { data, trace, verdict: { problems, agree: 0 } };
+  return { data, trace, verdict: { problems } };
 }
 
-export type Verdict = { problems: string[]; agree: number };
+export type Verdict = { problems: string[] };
 
 function structuralProblems(
   { lists, scalars }: ReturnType<typeof plan>,
@@ -65,6 +66,7 @@ function structuralProblems(
       problems.push(`empty:${field.name}`);
   }
   for (const list of lists) {
+    if (!list.required && data[list.name] === undefined) continue;
     const items = (data[list.name] ?? []) as unknown[];
     if (!items.length) problems.push(`empty:${list.name}`);
     if (!list.scalarItems && items.length) {

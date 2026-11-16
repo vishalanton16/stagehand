@@ -31,9 +31,9 @@ export async function runDecisionsExtract(
   const usage = zeroStagehandResultUsage();
   let requests = 0;
   const trace: Parameters<typeof mapCopyExtract>[1]["trace"] = [];
-  const counted = {
+  const counted: DecisionsConfig = {
     ...config,
-    recordDecisionUsage: (tokens: { inputTokens: number; outputTokens: number }) => {
+    recordDecisionUsage: (tokens) => {
       requests++;
       usage.inputTokens += tokens.inputTokens;
       usage.outputTokens += tokens.outputTokens;
@@ -54,10 +54,10 @@ export async function runDecisionsExtract(
     deps.progress.throwIfStopped();
     const schema = z.fromJSONSchema(deps.schema as Parameters<typeof z.fromJSONSchema>[0]);
     const valid = schema.safeParse(outcome.data);
-    const problems = outcome.verdict?.problems ?? ["missing_verdict"];
+    const problems = outcome.verdict.problems;
     if (!valid.success || problems.length)
       throw new Error(valid.success ? problems.join(",") : "schema_mismatch");
-    deps.logger.info("System One extraction accepted", {
+    deps.logger.info("Decisions extraction accepted", {
       category: "decisions",
       decisionRequests: requests,
     });
@@ -65,7 +65,7 @@ export async function runDecisionsExtract(
   } catch (error) {
     deps.progress.throwIfStopped();
     const reason = error instanceof Error ? error.message : String(error);
-    deps.logger.info("System One extraction fell back to the LLM", {
+    deps.logger.info("Decisions extraction fell back to the LLM", {
       category: "decisions",
       reason,
       decisionRequests: requests,
@@ -73,7 +73,7 @@ export async function runDecisionsExtract(
     return { kind: "fallback", reason, usage };
   } finally {
     usage.inferenceTimeMs = Math.round(performance.now() - started);
-    deps.logger.debug("System One extraction trace", {
+    deps.logger.debug("Decisions extraction trace", {
       category: "decisions",
       trace: JSON.stringify(trace),
     });

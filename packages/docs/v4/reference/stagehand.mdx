@@ -1763,7 +1763,6 @@ func Create(ctx context.Context, options CreateOptions) (*Stagehand, error)
   Instance-level server-side cache setting for `Act()`, `Observe()`, and `Extract()`. Browserbase must also [enable server-side caching for your project](/v4/best-practices/caching#enable-caching-for-your-project).
 </ParamField>
 
-
 <ParamField path="options.Logging" type="*StagehandClientLoggingConfig" optional>
   Client-side log level, output format, and optional log callback.
 </ParamField>
@@ -1793,7 +1792,6 @@ if _, err := page.Goto(ctx, "https://example.com", nil); err != nil {
 <ResponseField name="client.Browser()" type="*Browser">
   The browser handle you passed to `Create()`. Reach pages and the context through it when you hold the instance but not the handle: `client.Browser().Context()`. Stagehand does not close this browser for you.
 </ResponseField>
-
 
 <ResponseField name="client.Initialized()" type="bool">
   Whether the instance is connected and able to serve calls. This is `false` after `Close()`.

@@ -1,11 +1,11 @@
 ---
 title: "experimentalDecisions"
-description: "Experimental decision models for actions and extraction, with LLM fallback"
+description: "Experimental decision models for actions, observation, and extraction, with LLM fallback"
 icon: "flask"
 ---
 
 <Warning>
-  Experimental. The surface, its configuration, and its behavior may change between releases.
+  Experimental. This API and its behavior may change between releases.
 </Warning>
 
 Configure `experimentalDecisions`, then call its `act()`, `observe()` or `extract()` methods. Stagehand builds
@@ -16,8 +16,8 @@ same result shapes as their ordinary counterparts.
 `act()` selects complete click or literal-fill actions and checks the target before input. Other
 operations use the ordinary LLM pipeline. `extract()` maps schema fields to page records and copies
 values, with schema and evidence checks. `observe()` selects one target or classifies every candidate in a matching set, with
-explicit abstention and a fresh evidence check. Without an instruction it enumerates interactive
-controls without model inference. You do not select an action or extraction policy.
+explicit abstention and a fresh evidence check. Without an instruction it enumerates supported
+interactive controls without model inference, falling back to the LLM for unsupported page content.
 
 The ordinary methods on the Stagehand instance never call the decision provider. A namespace call
 without configuration fails. LLM fallback needs an ordinary model configuration or the existing
@@ -29,19 +29,16 @@ Browserbase gateway; a decision-provider API key does not provide LLM credential
 | --- | --- | --- |
 | `"perplexity"`, the default | `pplx-decider-v1.3` | `apiKey` |
 | `"typesafe"` | `jev-1.14.0` | `apiKey` |
-| `"cloudflare"` | `clef` | `apiKey` and `accountId`, or an account-scoped `apiUrl` |
+| `"cloudflare"` | `clef` | `apiKey`, plus `accountId` or an account-scoped `apiUrl` |
 
-An explicit `model` applies to both action and extraction requests. Perplexity also supports
-`pplx-decider-flash-v1.3`. Providers have different coverage and confidence calibration. The default
-policy is led by Perplexity's live-page comparisons; these results do not guarantee performance on
-all pages or equivalent native coverage from other providers. Only Perplexity currently supplies
-the bounded Locate second reading used by scalar extraction.
+An explicit `model` applies to all three operations. Perplexity also supports
+`pplx-decider-flash-v1.3`. Providers differ in coverage and confidence calibration. Only Perplexity
+supports the exact-span reading used to validate some scalar extraction results.
 
-Candidate descriptions and page context are sent to the provider for actions. Declared variable
-values of at least three characters are redacted in action requests, including values visible from
-earlier actions. Shorter values remain visible. Extraction sends relevant page text and field
-instructions to the provider. Avoid placing sensitive literals in instructions; use variables for
-actions that need them.
+Actions and observation send candidate descriptions and page context to the provider. Declared
+variable values of at least three characters are redacted, including values visible from earlier
+actions. Shorter values remain visible. Extraction sends page text and field instructions. Use
+variables for sensitive action values instead of placing them directly in instructions.
 
 ## Configuration
 
@@ -54,8 +51,14 @@ and rejected by configuration validation.
 | `provider` | `"perplexity"` | `"perplexity"`, `"typesafe"`, or `"cloudflare"`. |
 | `apiKey` | required | The decision provider's API key. |
 | `model` | provider default | A supported decision model used for all three operations. |
-| `apiUrl` | provider endpoint | An HTTPS endpoint override, without query or fragment. |
-| `accountId` | none | Cloudflare account ID, required unless `apiUrl` supplies the account-scoped endpoint. |
+| `apiUrl` | provider base URL | An HTTPS base URL override, without query or fragment. Stagehand appends the provider's request path. |
+| `accountId` | none | Cloudflare account ID, required unless `apiUrl` supplies the account-scoped base URL. |
+
+For Cloudflare, an `apiUrl` override must end at `/accounts/<account-id>/ai/run`, or an equivalent
+gateway base. Stagehand appends the model path. TypeSafe and Perplexity overrides normally contain
+only the origin; Stagehand appends `/v1/systemone` or `/v1/decisions`, respectively.
+
+The per-call `model` option configures LLM fallback. It does not override the decision model.
 
 <Tabs>
 <Tab title="TypeScript">
@@ -76,9 +79,7 @@ const product = await stagehand.experimentalDecisions.extract("Extract the produ
 
 ## act()
 
-Resolved by the decision model first, with the LLM pipeline as fallback. Arguments and result are those of the method of the same name on the Stagehand instance.
-
-Perform an action described in natural language.
+Select a supported action, using the configured LLM when needed. Passing an `Action` executes it directly.
 
 ```typescript
 const result = await stagehand.experimentalDecisions.act("Click the sign in button");
@@ -238,26 +239,26 @@ const result = await stagehand.experimentalDecisions.act("Click the sign in butt
   </ResponseField>
 
   <ResponseField name="result.metadata.usage" type="StagehandResultUsage">
-    Aggregate LLM usage for the operation. All counters are `0` when the operation does not run inference.
+    Aggregate decision-provider and LLM usage. Token counters are `0` when no inference runs.
 
     <ResponseField name="result.metadata.usage.inputTokens" type="number">
-      Input tokens consumed by all LLM calls.
+      Input tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.outputTokens" type="number">
-      Output tokens consumed by all LLM calls.
+      Output tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.reasoningTokens" type="number">
-      Reasoning tokens consumed by all LLM calls.
+      Reasoning tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.cachedInputTokens" type="number">
-      Cached input tokens used by all LLM calls.
+      Cached input tokens used by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.inferenceTimeMs" type="number">
-      Total time spent waiting for LLM inference, in milliseconds.
+      Time attributed to decision processing and LLM inference, in milliseconds.
     </ResponseField>
   </ResponseField>
 </ResponseField>
@@ -393,26 +394,26 @@ const actions = await stagehand.experimentalDecisions.observe("Find the sign in 
   </ResponseField>
 
   <ResponseField name="result.metadata.usage" type="StagehandResultUsage">
-    Aggregate LLM usage for the operation. All counters are `0` when the operation does not run inference.
+    Aggregate decision-provider and LLM usage. Token counters are `0` when no inference runs.
 
     <ResponseField name="result.metadata.usage.inputTokens" type="number">
-      Input tokens consumed by all LLM calls.
+      Input tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.outputTokens" type="number">
-      Output tokens consumed by all LLM calls.
+      Output tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.reasoningTokens" type="number">
-      Reasoning tokens consumed by all LLM calls.
+      Reasoning tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.cachedInputTokens" type="number">
-      Cached input tokens used by all LLM calls.
+      Cached input tokens used by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.inferenceTimeMs" type="number">
-      Total time spent waiting for LLM inference, in milliseconds.
+      Time attributed to decision processing and LLM inference, in milliseconds.
     </ResponseField>
   </ResponseField>
 </ResponseField>
@@ -420,9 +421,7 @@ const actions = await stagehand.experimentalDecisions.observe("Find the sign in 
 
 ## extract()
 
-Resolved by the decision model first, with the LLM pipeline as fallback. Arguments and result are those of the method of the same name on the Stagehand instance.
-
-Extract structured data from the page.
+Map page evidence into the requested schema, using the configured LLM when needed. Screenshot extraction and custom system instructions use the LLM directly.
 
 ```typescript
 const product = await stagehand.experimentalDecisions.extract("Extract the product", ProductSchema);
@@ -538,26 +537,26 @@ console.log(product.data, product.metadata.cache.status);
   </ResponseField>
 
   <ResponseField name="result.metadata.usage" type="StagehandResultUsage">
-    Aggregate LLM usage for the operation. All counters are `0` when the operation does not run inference.
+    Aggregate decision-provider and LLM usage. Token counters are `0` when no inference runs.
 
     <ResponseField name="result.metadata.usage.inputTokens" type="number">
-      Input tokens consumed by all LLM calls.
+      Input tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.outputTokens" type="number">
-      Output tokens consumed by all LLM calls.
+      Output tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.reasoningTokens" type="number">
-      Reasoning tokens consumed by all LLM calls.
+      Reasoning tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.cachedInputTokens" type="number">
-      Cached input tokens used by all LLM calls.
+      Cached input tokens used by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.inferenceTimeMs" type="number">
-      Total time spent waiting for LLM inference, in milliseconds.
+      Time attributed to decision processing and LLM inference, in milliseconds.
     </ResponseField>
   </ResponseField>
   </ResponseField>
@@ -582,9 +581,7 @@ product = await stagehand.experimental_decisions.extract("Extract the product", 
 
 ## act()
 
-Resolved by the decision model first, with the LLM pipeline as fallback. Arguments and result are those of the method of the same name on the Stagehand instance.
-
-Perform an action described in natural language.
+Select a supported action, using the configured LLM when needed. Passing an `Action` executes it directly.
 
 ```python
 result = await stagehand.experimental_decisions.act("Click the sign in button")
@@ -742,26 +739,26 @@ result = await stagehand.experimental_decisions.act("Click the sign in button")
   </ResponseField>
 
   <ResponseField name="result.metadata.usage" type="StagehandResultUsage">
-    Aggregate LLM usage for the operation. All counters are `0` when the operation does not run inference.
+    Aggregate decision-provider and LLM usage. Token counters are `0` when no inference runs.
 
     <ResponseField name="result.metadata.usage.input_tokens" type="int">
-      Input tokens consumed by all LLM calls.
+      Input tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.output_tokens" type="int">
-      Output tokens consumed by all LLM calls.
+      Output tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.reasoning_tokens" type="int">
-      Reasoning tokens consumed by all LLM calls.
+      Reasoning tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.cached_input_tokens" type="int">
-      Cached input tokens used by all LLM calls.
+      Cached input tokens used by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.inference_time_ms" type="int">
-      Total time spent waiting for LLM inference, in milliseconds.
+      Time attributed to decision processing and LLM inference, in milliseconds.
     </ResponseField>
   </ResponseField>
 </ResponseField>
@@ -895,26 +892,26 @@ actions = await stagehand.experimental_decisions.observe("Find the sign in butto
   </ResponseField>
 
   <ResponseField name="result.metadata.usage" type="StagehandResultUsage">
-    Aggregate LLM usage for the operation. All counters are `0` when the operation does not run inference.
+    Aggregate decision-provider and LLM usage. Token counters are `0` when no inference runs.
 
     <ResponseField name="result.metadata.usage.input_tokens" type="int">
-      Input tokens consumed by all LLM calls.
+      Input tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.output_tokens" type="int">
-      Output tokens consumed by all LLM calls.
+      Output tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.reasoning_tokens" type="int">
-      Reasoning tokens consumed by all LLM calls.
+      Reasoning tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.cached_input_tokens" type="int">
-      Cached input tokens used by all LLM calls.
+      Cached input tokens used by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.inference_time_ms" type="int">
-      Total time spent waiting for LLM inference, in milliseconds.
+      Time attributed to decision processing and LLM inference, in milliseconds.
     </ResponseField>
   </ResponseField>
 </ResponseField>
@@ -922,9 +919,7 @@ actions = await stagehand.experimental_decisions.observe("Find the sign in butto
 
 ## extract()
 
-Resolved by the decision model first, with the LLM pipeline as fallback. Arguments and result are those of the method of the same name on the Stagehand instance.
-
-Extract structured data from the page.
+Map page evidence into the requested schema, using the configured LLM when needed. Screenshot extraction and custom system instructions use the LLM directly.
 
 ```python
 product = await stagehand.experimental_decisions.extract("Extract the product", Product)
@@ -1037,26 +1032,26 @@ print(product.data, product.metadata.cache.status)
   </ResponseField>
 
   <ResponseField name="result.metadata.usage" type="StagehandResultUsage">
-    Aggregate LLM usage for the operation. All counters are `0` when the operation does not run inference.
+    Aggregate decision-provider and LLM usage. Token counters are `0` when no inference runs.
 
     <ResponseField name="result.metadata.usage.input_tokens" type="int">
-      Input tokens consumed by all LLM calls.
+      Input tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.output_tokens" type="int">
-      Output tokens consumed by all LLM calls.
+      Output tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.reasoning_tokens" type="int">
-      Reasoning tokens consumed by all LLM calls.
+      Reasoning tokens consumed by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.cached_input_tokens" type="int">
-      Cached input tokens used by all LLM calls.
+      Cached input tokens used by all model calls.
     </ResponseField>
 
     <ResponseField name="result.metadata.usage.inference_time_ms" type="int">
-      Total time spent waiting for LLM inference, in milliseconds.
+      Time attributed to decision processing and LLM inference, in milliseconds.
     </ResponseField>
   </ResponseField>
   </ResponseField>

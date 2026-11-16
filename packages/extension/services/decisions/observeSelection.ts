@@ -148,7 +148,8 @@ export async function selectObservation(
   if (cardinality.choice === "one") {
     const answer = choiceAnswer(response, "target");
     const exists = noulAnswer(response, "exists").noul;
-    if (answer.choice === "none_match" && exists <= REJECT) return { kind: "done", actions: [] };
+    if (answer.choice === "none_match" && answer.confidence >= CONFIDENCE && exists <= REJECT)
+      return { kind: "done", actions: [] };
     if (answer.choice === "none_match" || answer.confidence < CONFIDENCE || exists < CONFIDENCE)
       return fallback("target_uncertain");
     const selected = candidates.find((c) => c.node.id === answer.choice);
@@ -161,10 +162,12 @@ export async function selectObservation(
     p: noulAnswer(response, `match_${candidate.node.id}`).noul,
   }));
   if (scored.some((x) => x.p > REJECT && x.p < ACCEPT)) return fallback("uncertain_set_member");
+  const matches = scored.filter((x) => x.p >= ACCEPT);
+  const exists = noulAnswer(response, "exists").noul;
+  if (matches.length ? exists < CONFIDENCE : exists > REJECT)
+    return fallback("set_existence_disagrees");
   return {
     kind: "done",
-    actions: scored
-      .filter((x) => x.p >= ACCEPT)
-      .map((x) => toAction(x.candidate, operation.choice)),
+    actions: matches.map((x) => toAction(x.candidate, operation.choice)),
   };
 }

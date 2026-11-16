@@ -113,6 +113,19 @@ describe("complete action choices", () => {
       }),
     ]);
   });
+  it("does not recover an editor outside the locator-scoped outline", () => {
+    const page = editorSnapshot();
+    page.formattedTree = "[0-5] heading: Editor";
+    expect(buildPlans(page, 'Fill Message editor with "hello"')).toEqual([]);
+  });
+
+  it("recovers an omitted editor inside the scoped root", () => {
+    const page = editorSnapshot();
+    page.formattedTree = "[0-2] body\n  [0-8] StaticText: old text";
+    expect(buildPlans(page, 'Fill Message editor with "hello"')).toEqual([
+      expect.objectContaining({ nodeId: "0-7", method: "fill" }),
+    ]);
+  });
   it("enumerates complete literal actions and preserves link destinations", () => {
     const plans = buildPlans(snapshot(), 'Fill Search with "hello"');
     expect(plans).toEqual(
@@ -228,13 +241,15 @@ function dependencies(page = snapshot()) {
         .map((id) => [id, page.facts[id]]),
     ),
   );
+  const backendNodeId = vi.fn(async () => 2);
   const session = {
-    send: vi.fn(async (method: string) =>
-      method === "Runtime.callFunctionOn" ? { result: { value: { verdict: "ok" } } } : {},
-    ),
+    send: vi.fn(async (method: string) => {
+      if (method === "DOM.describeNode") return { node: { backendNodeId: await backendNodeId() } };
+      return method === "Runtime.callFunctionOn" ? { result: { value: { verdict: "ok" } } } : {};
+    }),
   };
   const locator = {
-    backendNodeId: vi.fn(async () => 2),
+    backendNodeId,
     getFrame: () => ({ session }),
     resolveNode: async () => ({ objectId: "target" }),
     inputValue: async () => "hello",
@@ -303,6 +318,33 @@ describe("action execution guards", () => {
     });
     expect(takeAction).not.toHaveBeenCalled();
   });
+
+  it.each(["renamed target", "changed heading", "new duplicate target"])(
+    "rejects changed AX evidence before input: %s",
+    async (mutation) => {
+      provider("action_0");
+      const page = snapshot();
+      page.formattedTree =
+        "[0-1] RootWebArea: Directory\n  [0-4] heading: Reading\n  [0-2] link: Open";
+      const { deps, takeAction } = dependencies(page);
+      const original = await deps.page.captureSnapshot({}, deps.progress);
+      const combinedTree =
+        mutation === "renamed target"
+          ? original.combinedTree.replace("link: Open", "link: Delete")
+          : mutation === "changed heading"
+            ? original.combinedTree.replace("heading: Reading", "heading: Danger")
+            : `${original.combinedTree}\n  [0-5] link: Open`;
+      deps.page.captureSnapshot = vi
+        .fn()
+        .mockResolvedValueOnce(original)
+        .mockResolvedValueOnce({ ...original, combinedTree });
+      expect(await runDecisionsAct(config, deps)).toMatchObject({
+        kind: "fallback",
+        reason: "action_plan_evidence_changed",
+      });
+      expect(takeAction).not.toHaveBeenCalled();
+    },
+  );
 
   it("executes a checked complete action exactly once", async () => {
     provider("action_0");

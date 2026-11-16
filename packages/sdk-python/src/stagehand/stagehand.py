@@ -127,13 +127,6 @@ class Stagehand:
         """
         if not isinstance(browser, StagehandBrowser):
             raise TypeError("browser must be created by local_browser or browserbase")
-        if (
-            experimental_decisions
-            and experimental_decisions.get("provider") == "cloudflare"
-            and not experimental_decisions.get("account_id")
-            and not experimental_decisions.get("api_url")
-        ):
-            raise ValueError("Cloudflare decisions require account_id or an account-scoped api_url")
         model_connection_options = (model_api_key, model_headers)
         if model is None and any(value is not None for value in model_connection_options):
             raise TypeError("model connection options require a model name")
