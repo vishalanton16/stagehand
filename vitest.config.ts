@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     testTimeout: 15_000,
     include: [
+      "apps/extension/tests/**/*.test.ts",
       "packages/protocol/tests/**/*.test.ts",
       "packages/protocol/json-rpc/tests/**/*.test.ts",
       "packages/docs/tests/**/*.test.ts",

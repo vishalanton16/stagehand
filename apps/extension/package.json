@@ -1,0 +1,30 @@
+{
+  "name": "@browserbasehq/webmcp-debugger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Discover, run, and debug tools exposed by the current tab.",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "typecheck": "wxt prepare && tsc --noEmit"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "4.1.6",
+    "@pierre/words": "0.2.2",
+    "libfx": "catalog:",
+    "lucide-react": "0.577.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "^19",
+    "@types/react-dom": "~19.2.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "wxt": "0.21.5"
+  }
+}
