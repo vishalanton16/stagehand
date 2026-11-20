@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { PERPLEXITY_DEFAULT_MODEL } from "../../../extension/services/decisions/client.js";
 import { trimTrailingTextNode } from "../../../extension/utils.js";
 import { hybrid, literal, runtime, type ReplayArm } from "./arms.js";
-import manifest from "./manifest.json" with { type: "json" };
+import defaultManifest from "./manifest.json" with { type: "json" };
 
 const [dir, ...armSpecs] = process.argv.slice(2);
 if (!dir || !armSpecs.length) {
@@ -39,6 +39,12 @@ type StudyCase = {
   targets: Target[];
 };
 
+const manifestPath = process.env.STUDY_MANIFEST;
+const manifest: {
+  captureRevision: string;
+  captures: Array<{ site: string; sha256: string }>;
+  cases: StudyCase[];
+} = manifestPath ? JSON.parse(readFileSync(manifestPath, "utf8")) : defaultManifest;
 const cases: readonly StudyCase[] = manifest.cases;
 const selectedIds = process.env.STUDY_CASES?.split(",");
 if (

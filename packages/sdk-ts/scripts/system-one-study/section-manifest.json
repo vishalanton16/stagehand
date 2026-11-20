@@ -1,0 +1,372 @@
+{
+  "captureRevision": "c04b4c31e43154c3e420073ca368187e64bb0008",
+  "captures": [
+    {
+      "site": "sqlite",
+      "requestedUrl": "https://sqlite.org/whentouse.html",
+      "url": "https://sqlite.org/whentouse.html",
+      "capturedAt": "2026-11-20T06:05:42.622Z",
+      "sha256": "22f71afca3b0dc430d1bd0eb0bc97c8fd4baff3c397e9ed0c52f1d225117fdde",
+      "bytes": 147063,
+      "snapshotMs": 22,
+      "outlineNodes": 265,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "github-readme",
+      "requestedUrl": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes",
+      "url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes",
+      "capturedAt": "2026-11-20T06:05:43.186Z",
+      "sha256": "0c38076fba9dae90bcfc64dd20a7decbf6b6d02e5f32fb38459ea0fc7b564968",
+      "bytes": 268276,
+      "snapshotMs": 73,
+      "outlineNodes": 273,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "wcag",
+      "requestedUrl": "https://www.w3.org/WAI/standards-guidelines/wcag/",
+      "url": "https://www.w3.org/WAI/standards-guidelines/wcag/",
+      "capturedAt": "2026-11-20T06:05:43.654Z",
+      "sha256": "ace7e04d1c62cd8b983603f9ef6319bae42415f2fe01fc503d4d47aa7741663a",
+      "bytes": 202204,
+      "snapshotMs": 28,
+      "outlineNodes": 522,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "mdn-section",
+      "requestedUrl": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/section",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/section",
+      "capturedAt": "2026-11-20T06:05:44.302Z",
+      "sha256": "afde88486dd5bad54f9dcfe99e8a6aae9f58653b1f6dd33d3aca5cacd4ff888f",
+      "bytes": 652357,
+      "snapshotMs": 124,
+      "outlineNodes": 1358,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "git-switch",
+      "requestedUrl": "https://git-scm.com/docs/git-switch",
+      "url": "https://git-scm.com/docs/git-switch",
+      "capturedAt": "2026-11-20T06:05:46.318Z",
+      "sha256": "018c70c8973e334f437eb07161ac1bcf0c883a100b629d9370397004dcb074e9",
+      "bytes": 354429,
+      "snapshotMs": 46,
+      "outlineNodes": 772,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "python-tutorial",
+      "requestedUrl": "https://docs.python.org/3/tutorial/",
+      "url": "https://docs.python.org/3/tutorial/",
+      "capturedAt": "2026-11-20T06:05:47.028Z",
+      "sha256": "2f84f7f9e5f96b63daa5d64aff5ea6b117d39d4fca366f784780513771186991",
+      "bytes": 358119,
+      "snapshotMs": 40,
+      "outlineNodes": 743,
+      "frameOrdinals": 1
+    }
+  ],
+  "cases": [
+    {
+      "id": "sqlite-uses",
+      "site": "sqlite",
+      "instruction": "Find all links in the 1. Situations Where SQLite Works Well section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-156",
+          "method": "click"
+        },
+        {
+          "node": "0-161",
+          "method": "click"
+        },
+        {
+          "node": "0-164",
+          "method": "click"
+        },
+        {
+          "node": "0-167",
+          "method": "click"
+        },
+        {
+          "node": "0-170",
+          "method": "click"
+        },
+        {
+          "node": "0-173",
+          "method": "click"
+        },
+        {
+          "node": "0-186",
+          "method": "click"
+        },
+        {
+          "node": "0-189",
+          "method": "click"
+        },
+        {
+          "node": "0-194",
+          "method": "click"
+        },
+        {
+          "node": "0-204",
+          "method": "click"
+        },
+        {
+          "node": "0-237",
+          "method": "click"
+        },
+        {
+          "node": "0-250",
+          "method": "click"
+        },
+        {
+          "node": "0-254",
+          "method": "click"
+        },
+        {
+          "node": "0-257",
+          "method": "click"
+        },
+        {
+          "node": "0-260",
+          "method": "click"
+        },
+        {
+          "node": "0-263",
+          "method": "click"
+        },
+        {
+          "node": "0-6",
+          "method": "click"
+        },
+        {
+          "node": "0-282",
+          "method": "click"
+        },
+        {
+          "node": "0-285",
+          "method": "click"
+        },
+        {
+          "node": "0-288",
+          "method": "click"
+        },
+        {
+          "node": "0-294",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "sqlite-client-server",
+      "site": "sqlite",
+      "instruction": "Find all links in the 2. Situations Where A Client/Server RDBMS May Work Better section.",
+      "match": "exact",
+      "targets": []
+    },
+    {
+      "id": "sqlite-checklist",
+      "site": "sqlite",
+      "instruction": "Find all links in the 3. Checklist For Choosing The Right Database Engine section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-390",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "github-further-reading",
+      "site": "github-readme",
+      "instruction": "Find all links in the Further reading section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-1243",
+          "method": "click"
+        },
+        {
+          "node": "0-1249",
+          "method": "click"
+        },
+        {
+          "node": "0-1253",
+          "method": "click"
+        },
+        {
+          "node": "0-1258",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "wcag-translations",
+      "site": "wcag",
+      "instruction": "Find all links in the Translations section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-631",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "wcag-supporting",
+      "site": "wcag",
+      "instruction": "Find all links in the Supporting material and supplemental guidance section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-561",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "wcag-more",
+      "site": "wcag",
+      "instruction": "Find all links in the More about WCAG section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-683",
+          "method": "click"
+        },
+        {
+          "node": "0-690",
+          "method": "click"
+        },
+        {
+          "node": "0-698",
+          "method": "click"
+        },
+        {
+          "node": "0-704",
+          "method": "click"
+        },
+        {
+          "node": "0-713",
+          "method": "click"
+        },
+        {
+          "node": "0-727",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "mdn-see-also",
+      "site": "mdn-section",
+      "instruction": "Find all links in the See also section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "3-1440",
+          "method": "click"
+        },
+        {
+          "node": "3-1448",
+          "method": "click"
+        },
+        {
+          "node": "3-1452",
+          "method": "click"
+        },
+        {
+          "node": "3-1456",
+          "method": "click"
+        },
+        {
+          "node": "3-1460",
+          "method": "click"
+        },
+        {
+          "node": "3-1464",
+          "method": "click"
+        },
+        {
+          "node": "3-1467",
+          "method": "click"
+        },
+        {
+          "node": "3-1470",
+          "method": "click"
+        },
+        {
+          "node": "3-1473",
+          "method": "click"
+        },
+        {
+          "node": "3-1476",
+          "method": "click"
+        },
+        {
+          "node": "3-1479",
+          "method": "click"
+        },
+        {
+          "node": "3-1482",
+          "method": "click"
+        },
+        {
+          "node": "3-1486",
+          "method": "click"
+        },
+        {
+          "node": "3-1490",
+          "method": "click"
+        },
+        {
+          "node": "3-1494",
+          "method": "click"
+        },
+        {
+          "node": "3-1499",
+          "method": "click"
+        },
+        {
+          "node": "3-1503",
+          "method": "click"
+        },
+        {
+          "node": "3-1507",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "git-see-also",
+      "site": "git-switch",
+      "instruction": "Find all links in the SEE ALSO section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-1667",
+          "method": "click"
+        },
+        {
+          "node": "0-1670",
+          "method": "click"
+        }
+      ]
+    },
+    {
+      "id": "python-previous-topic",
+      "site": "python-tutorial",
+      "instruction": "Find all links in the Previous topic section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-1390",
+          "method": "click"
+        }
+      ]
+    }
+  ]
+}

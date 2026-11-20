@@ -1,17 +1,20 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFacts } from "../../../extension/services/decisions/actionFacts.js";
 import type { ObservationSnapshot } from "../../../extension/services/decisions/observeCandidates.js";
 import { parseOutline } from "../../../extension/services/decisions/outline.js";
-import pages from "./pages.json" with { type: "json" };
+import defaultPages from "./pages.json" with { type: "json" };
 
-const [dir] = process.argv.slice(2);
+const [dir, pagesFile] = process.argv.slice(2);
 if (!dir || !resolve(dir).split("/").includes("vendor-repos")) {
   throw new Error("Pass a new capture directory under vendor-repos/");
 }
+const pages = pagesFile
+  ? (JSON.parse(await readFile(pagesFile, "utf8")) as Record<string, string>)
+  : defaultPages;
 
 process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH ??= fileURLToPath(
   new URL("../../../extension/dist/", import.meta.url),
