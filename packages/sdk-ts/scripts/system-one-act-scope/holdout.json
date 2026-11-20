@@ -1,0 +1,25 @@
+{
+  "iana": [
+    ["Click the IANA-managed Reserved Domains link in the Further Reading section.", "0-77"],
+    ["Open the Special-Use Domain Names link under Further Reading.", "0-79"],
+    ["Click the Protocols link in the Further Reading section.", null],
+    ["Click the Protocols link in the top navigation.", "0-61"],
+    ["Click the Protocols link.", null]
+  ],
+  "map": [
+    ["Click the attribution guidelines link under How to credit OpenStreetMap.", "0-114"],
+    ["Click the Trademark Policy link in the Trademarks section.", "0-145"],
+    ["Click the Tile Usage Policy link under Additional services.", "0-155"],
+    ["Click the Tile Usage Policy link in the Trademarks section.", null],
+    ["Click the Trademark Policy link in the Copyright infringement section.", null]
+  ],
+  "postgres": [
+    ["Click the this form link in the Submit correction section.", "0-543"],
+    ["Click the E. Release Notes link in the Submit correction section.", null],
+    ["Click the E. Release Notes link.", "0-482"]
+  ],
+  "books": [
+    ["Click the It's Only the Himalayas title link.", "0-239"],
+    ["Click the Full Moon over Noah’s Ark title link.", "0-254"]
+  ]
+}
