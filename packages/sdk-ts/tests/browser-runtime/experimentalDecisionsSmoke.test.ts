@@ -166,4 +166,39 @@ describe("experimental decisions in a real browser", () => {
     expect(await page.evaluate(() => document.body.dataset.clicked === "yes")).toBe(false);
     expect(generate).toHaveBeenCalledOnce();
   });
+
+  it.each([{ headingChanged: false }, { headingChanged: true }])(
+    "checks DOM heading text before a scoped action ($headingChanged)",
+    async ({ headingChanged }) => {
+      const [page] = await browser.context.pages();
+      await page.evaluate(() => {
+        document.body.innerHTML = `
+        <main>
+          <h2 aria-label="Further Reading">Further Reading</h2>
+          <a href="#guide" onclick="document.body.dataset.clicked='yes'">Guide</a>
+        </main>`;
+      });
+      await worker("globalThis.__holdDecision = true");
+      const pending = stagehand.experimentalDecisions.act(
+        "Click the Guide link in the Further Reading section.",
+        { page, timeout: 10_000 },
+      );
+      try {
+        await expect.poll(() => worker("globalThis.__decisionRequested")).toBe(true);
+        if (headingChanged) {
+          await page.evaluate(() => {
+            document.querySelector("h2")!.textContent = "Other resources";
+          });
+        }
+      } finally {
+        await worker("globalThis.__releaseDecision?.()");
+      }
+      const result = await pending;
+      expect(result.data.success).toBe(!headingChanged);
+      expect(await page.evaluate(() => document.body.dataset.clicked === "yes")).toBe(
+        !headingChanged,
+      );
+      expect(generate).toHaveBeenCalledTimes(headingChanged ? 1 : 0);
+    },
+  );
 });

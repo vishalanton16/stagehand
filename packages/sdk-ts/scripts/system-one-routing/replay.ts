@@ -118,7 +118,7 @@ const arms = models.flatMap((route) => {
 const digest = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 const files = readdirSync(archive)
   .filter((file) => file.endsWith(".labels.json"))
-  .sort();
+  .sort((left, right) => left.localeCompare(right));
 const captures = existsSync(join(archive, "capture.json"))
   ? loadFreshCorpus(archive)
   : files.map((file) => {
@@ -172,13 +172,14 @@ writeFileSync(
   ) + "\n",
 );
 
-type Receipt = { status?: number; ms: number; bytes: number };
+type Receipt = { status?: number; ms: number; bytes?: number };
 const receipts = new AsyncLocalStorage<Receipt[]>();
 const fetchOriginal = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const isGateway = input === `${GATEWAY_ROOT}/v1/decisions`;
-  const body = String(init?.body ?? "");
-  const wireBody = isGateway ? encodeGatewayDecision(body) : body;
+  const body = typeof init?.body === "string" ? init.body : undefined;
+  if (isGateway && body === undefined) throw new Error("Expected a JSON Gateway request");
+  const wireBody = isGateway ? encodeGatewayDecision(body!) : body;
   const started = performance.now();
   let status: number | undefined;
   try {
@@ -191,7 +192,11 @@ globalThis.fetch = async (input, init) => {
     return isGateway ? await decodeGatewayDecision(response) : response;
   } finally {
     const log = receipts.getStore();
-    log?.push({ status, ms: performance.now() - started, bytes: Buffer.byteLength(wireBody) });
+    log?.push({
+      status,
+      ms: performance.now() - started,
+      bytes: wireBody === undefined ? undefined : Buffer.byteLength(wireBody),
+    });
   }
 };
 

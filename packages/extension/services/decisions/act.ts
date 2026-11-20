@@ -64,9 +64,12 @@ export async function runDecisionsAct(
     });
     if (!selected.plan) return { kind: "fallback", reason: "action_plan_abstained" };
     const plan = selected.plan;
-    const target = actionNodes(view).find((node) => node.id === plan.nodeId);
+    const nodes = actionNodes(view);
+    const target = nodes.find((node) => node.id === plan.nodeId);
     const xpath = trimTrailingTextNode(view.xpathMap[plan.nodeId]);
     if (!target || !xpath) return { kind: "fallback", reason: "action_plan_missing_xpath" };
+    const structural =
+      plan.method === "click" ? actionContext(view, nodes, deps.instruction)?.(target) : undefined;
     const selector = `xpath=${xpath}`;
     const guard = await checkSelectedTarget(
       deps.page,
@@ -96,6 +99,22 @@ export async function runDecisionsAct(
     };
     const refreshedNodes = actionNodes(refreshedView);
     const refreshedTarget = refreshedNodes.find((node) => node.id === plan.nodeId);
+    if (structural) {
+      const headingPaths = Object.fromEntries(
+        refreshedNodes.flatMap(({ id, role }) =>
+          role === "heading" && refreshedView.xpathMap[id]
+            ? [[id, refreshedView.xpathMap[id]!]]
+            : [],
+        ),
+      );
+      if (Object.keys(headingPaths).length) {
+        const headingFacts = await deps.progress.run("revalidating action headings", () =>
+          deps.page.evaluate(readFacts, headingPaths),
+        );
+        for (const id of Object.keys(headingPaths)) delete refreshedView.facts[id];
+        Object.assign(refreshedView.facts, headingFacts);
+      }
+    }
     const refreshedContext =
       refreshedTarget && plan.method === "click"
         ? actionContext(refreshedView, refreshedNodes, deps.instruction)?.(refreshedTarget)
@@ -103,6 +122,7 @@ export async function runDecisionsAct(
     if (
       !refreshedTarget ||
       refreshed.combinedXpathMap[plan.nodeId] !== view.xpathMap[plan.nodeId] ||
+      JSON.stringify(structural) !== JSON.stringify(refreshedContext) ||
       JSON.stringify(
         evidence(refreshedView, refreshedNodes, refreshedTarget, true, true, refreshedContext),
       ) !== JSON.stringify(plan.evidence)

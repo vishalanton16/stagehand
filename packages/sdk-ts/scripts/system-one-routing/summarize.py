@@ -20,7 +20,8 @@ def metrics(rows):
         "p50Ms": percentile(times, 0.5),
         "p95Ms": percentile(times, 0.95),
         "requests": sum(len(row["requests"]) for row in rows),
-        "requestBytes": sum(req["bytes"] for row in rows for req in row["requests"]),
+        "requestBytes": sum(req.get("bytes", 0) for row in rows for req in row["requests"]),
+        "requestsWithoutByteCount": sum("bytes" not in req for row in rows for req in row["requests"]),
         "inputTokens": sum(receipt["inputTokens"] for row in rows for receipt in row["usage"]),
         "outputTokens": sum(receipt["outputTokens"] for row in rows for receipt in row["usage"]),
     }
