@@ -16,7 +16,10 @@
     "cases": [
       ["Click the About READMEs link in the In This Article table of contents.", ["0-1105"]],
       ["Click the About READMEs permalink on the article's section heading.", ["0-1139"]],
-      ["Open Section links from the paragraph in the Section links in markdown files and blob pages section.", ["0-1192"]],
+      [
+        "Open Section links from the paragraph in the Section links in markdown files and blob pages section.",
+        ["0-1192"]
+      ],
       ["Click the About READMEs link in Further reading.", []],
       ["Click the About READMEs link.", []]
     ]
