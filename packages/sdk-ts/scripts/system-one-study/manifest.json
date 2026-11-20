@@ -1,0 +1,321 @@
+{
+  "captureRevision": "93b9d913281cd361a296f3126712827700215b53",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "captures": [
+    {
+      "site": "books",
+      "requestedUrl": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+      "url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+      "capturedAt": "2026-11-20T05:56:54.792Z",
+      "sha256": "8f76eb4e58eaca30c907228d51b83f8fa73e0fa05870e59b575fb94b878e9abe",
+      "bytes": 141585,
+      "snapshotMs": 28,
+      "outlineNodes": 341,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "iana",
+      "requestedUrl": "https://www.iana.org/help/example-domains",
+      "url": "https://www.iana.org/help/example-domains",
+      "capturedAt": "2026-11-20T05:57:06.775Z",
+      "sha256": "425e25297599e9a42f61e329b26cc9839055c54d1d0321b5e2a0cbc80b4e67a3",
+      "bytes": 45303,
+      "snapshotMs": 11,
+      "outlineNodes": 116,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "postgres",
+      "requestedUrl": "https://www.postgresql.org/docs/current/index.html",
+      "url": "https://www.postgresql.org/docs/current/index.html",
+      "capturedAt": "2026-11-20T05:57:09.043Z",
+      "sha256": "d45961de50995238786d1abd6273266b1451d33b22d03b4bef2f66a94b57a1bf",
+      "bytes": 195775,
+      "snapshotMs": 22,
+      "outlineNodes": 423,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "weather",
+      "requestedUrl": "https://www.weather.gov/about/",
+      "url": "https://www.weather.gov/about/",
+      "capturedAt": "2026-11-20T05:57:18.006Z",
+      "sha256": "05f336eb55292fbc36ca36bb86bfe912260479cc6abe87eab065862c1985db31",
+      "bytes": 137264,
+      "snapshotMs": 32,
+      "outlineNodes": 161,
+      "frameOrdinals": 2
+    },
+    {
+      "site": "iframe",
+      "requestedUrl": "https://www.w3schools.com/html/html_iframe.asp",
+      "url": "https://www.w3schools.com/html/html_iframe.asp",
+      "capturedAt": "2026-11-20T05:57:19.615Z",
+      "sha256": "69a2be7f941ceb642a1e443f7118c9facb63777fd1f38a3a9fcea686429b3262",
+      "bytes": 1409710,
+      "snapshotMs": 152,
+      "outlineNodes": 1255,
+      "frameOrdinals": 2
+    },
+    {
+      "site": "nested",
+      "requestedUrl": "https://stagehand-eval-sites.vercel.app/sites/nested-iframes/",
+      "url": "https://stagehand-eval-sites.vercel.app/sites/nested-iframes/",
+      "capturedAt": "2026-11-20T05:57:21.587Z",
+      "sha256": "ec0720e27329f38b801ffa81c6ad61bf5b00244e2c270939b3b5eab2f0aeca2f",
+      "bytes": 9714,
+      "snapshotMs": 9,
+      "outlineNodes": 21,
+      "frameOrdinals": 4
+    },
+    {
+      "site": "map",
+      "requestedUrl": "https://www.openstreetmap.org/copyright",
+      "url": "https://www.openstreetmap.org/copyright",
+      "capturedAt": "2026-11-20T05:57:23.503Z",
+      "sha256": "6a297064f35dd08a20324aae9fcc5e9451c52381e3db95960393f76bb1283d62",
+      "bytes": 110641,
+      "snapshotMs": 17,
+      "outlineNodes": 245,
+      "frameOrdinals": 1
+    },
+    {
+      "site": "tryit",
+      "requestedUrl": "https://www.w3schools.com/html/tryit.asp?filename=tryhtml_iframe_height_width",
+      "url": "https://www.w3schools.com/html/tryit.asp?filename=tryhtml_iframe_height_width",
+      "capturedAt": "2026-11-20T05:57:23.865Z",
+      "sha256": "38be90b8da48abae5c759fd3240de1471fa4aebe519978696e0a3ffe8ed1045c",
+      "bytes": 61887,
+      "snapshotMs": 17,
+      "outlineNodes": 95,
+      "frameOrdinals": 3
+    }
+  ],
+  "cases": [
+    {
+      "id": "books-heading",
+      "site": "books",
+      "instruction": "Find the heading \"Travel\".",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-222",
+          "method": "click"
+        }
+      ],
+      "audit": "The catalog H1 is the target. The category sidebar has a link with the same name."
+    },
+    {
+      "id": "books-breadcrumb",
+      "site": "books",
+      "instruction": "Find the Books link in the breadcrumb trail.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-57",
+          "method": "click"
+        }
+      ],
+      "audit": "The target is in the breadcrumb list above the catalog. The sidebar link shares its name."
+    },
+    {
+      "id": "books-either",
+      "site": "books",
+      "instruction": "Find any one link labeled \"Books\".",
+      "match": "one-of",
+      "targets": [
+        {
+          "node": "0-57",
+          "method": "click"
+        },
+        {
+          "node": "0-67",
+          "method": "click"
+        }
+      ],
+      "audit": "Both anchors bear the exact label. The home brand name is longer."
+    },
+    {
+      "id": "books-all",
+      "site": "books",
+      "instruction": "Find all links labeled exactly \"Books\".",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-57",
+          "method": "click"
+        },
+        {
+          "node": "0-67",
+          "method": "click"
+        }
+      ],
+      "audit": "Both anchors are required. The longer brand name and category links are excluded."
+    },
+    {
+      "id": "books-absent",
+      "site": "books",
+      "instruction": "Find the heading \"Click and Collect\".",
+      "match": "exact",
+      "targets": [],
+      "audit": "The catalog and product headings contain no pickup heading."
+    },
+    {
+      "id": "iana-further-reading",
+      "site": "iana",
+      "instruction": "Find all links in the Further Reading section.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-77",
+          "method": "click"
+        },
+        {
+          "node": "0-79",
+          "method": "click"
+        },
+        {
+          "node": "0-81",
+          "method": "click"
+        }
+      ],
+      "audit": "The list immediately below the section H2 has three anchors. Footer navigation is outside the section."
+    },
+    {
+      "id": "iana-header-protocols",
+      "site": "iana",
+      "instruction": "Find the Protocols link in the top navigation.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-61",
+          "method": "click"
+        }
+      ],
+      "audit": "The header anchor is required. The footer has a separate anchor with the same name."
+    },
+    {
+      "id": "postgres-documentation-search",
+      "site": "postgres",
+      "instruction": "Find the field that searches only the PostgreSQL documentation.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-9",
+          "method": "fill"
+        }
+      ],
+      "audit": "The documentation form has a dedicated textbox. The site navigation has a second textbox for general search."
+    },
+    {
+      "id": "postgres-release-notes",
+      "site": "postgres",
+      "instruction": "Find the link \"E. Release Notes\".",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-482",
+          "method": "click"
+        }
+      ],
+      "audit": "The relevant visible link is in the appendices of the documentation table of contents."
+    },
+    {
+      "id": "weather-mission",
+      "site": "weather",
+      "instruction": "Find the heading \"NWS Mission\".",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "1-310",
+          "method": "click"
+        }
+      ],
+      "audit": "The mission H1 is distinct from the nearby vision and transformation H1s."
+    },
+    {
+      "id": "map-credit",
+      "site": "map",
+      "instruction": "Find the heading \"How to credit OpenStreetMap\".",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "0-100",
+          "method": "click"
+        }
+      ],
+      "audit": "The licensing page uses this H3 for attribution instructions."
+    },
+    {
+      "id": "map-absent",
+      "site": "map",
+      "instruction": "Find a button that downloads the entire map as a PDF.",
+      "match": "exact",
+      "targets": [],
+      "audit": "The license page has no such button. General map navigation and export-related links do not satisfy the request."
+    },
+    {
+      "id": "iframe-tutorial-heading",
+      "site": "iframe",
+      "instruction": "Find the main HTML Iframes heading of the tutorial page.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "4-3467",
+          "method": "click"
+        }
+      ],
+      "audit": "The main document has both an H1 and an H2 with the same title. The H1 is the requested main heading."
+    },
+    {
+      "id": "tryit-deep-heading",
+      "site": "tryit",
+      "instruction": "Find the heading \"This page is displayed in an iframe\".",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "1-358",
+          "method": "click"
+        }
+      ],
+      "audit": "The H1 is beneath two iframe hops in the result. Editor source text is outside the result."
+    },
+    {
+      "id": "nested-username",
+      "site": "nested",
+      "instruction": "Find the Username field in the innermost frame.",
+      "match": "exact",
+      "targets": [
+        {
+          "node": "2-8",
+          "method": "fill"
+        }
+      ],
+      "audit": "The first input in the form below three iframe hops is labeled Username."
+    },
+    {
+      "id": "nested-discovery",
+      "site": "nested",
+      "instruction": null,
+      "match": "exact",
+      "targets": [
+        {
+          "node": "2-8",
+          "method": "fill"
+        },
+        {
+          "node": "2-9",
+          "method": "fill"
+        },
+        {
+          "node": "2-10",
+          "method": "click"
+        }
+      ],
+      "audit": "The innermost form has two text inputs and a button. The outer frames are containers."
+    }
+  ]
+}

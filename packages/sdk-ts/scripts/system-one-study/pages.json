@@ -1,0 +1,10 @@
+{
+  "books": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+  "iana": "https://www.iana.org/help/example-domains",
+  "postgres": "https://www.postgresql.org/docs/current/index.html",
+  "weather": "https://www.weather.gov/about/",
+  "iframe": "https://www.w3schools.com/html/html_iframe.asp",
+  "nested": "https://stagehand-eval-sites.vercel.app/sites/nested-iframes/",
+  "map": "https://www.openstreetmap.org/copyright",
+  "tryit": "https://www.w3schools.com/html/tryit.asp?filename=tryhtml_iframe_height_width"
+}
