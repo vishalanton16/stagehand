@@ -232,7 +232,7 @@ try {
         );
         return gold.filter((group) => group.some((key) => keys.has(key))).length;
       });
-    console.log(
+    process.stdout.write(
       JSON.stringify({
         name,
         split,
@@ -244,7 +244,7 @@ try {
         offered: [prior, next].map(
           (plans) => gold.filter((group) => plans.some((plan) => matches(plan, job, group))).length,
         ),
-      }),
+      }) + "\n",
     );
   }
   if (mode === "--live") {
@@ -255,7 +255,8 @@ try {
     assert(changed.length * 4 <= maxAttempts);
     let attempts = 0;
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      assert.equal(String(input), "https://api.perplexity.ai/v1/decisions");
+      const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+      assert.equal(url, "https://api.perplexity.ai/v1/decisions");
       assert(++attempts <= maxAttempts, "Provider attempt limit");
       return await fetchLive(input, init);
     }) as typeof fetch;
@@ -274,7 +275,7 @@ try {
           job.instruction,
         );
       } catch (error) {
-        console.log(
+        process.stdout.write(
           JSON.stringify({
             name: job.name,
             split: job.split,
@@ -282,7 +283,7 @@ try {
             round,
             status: "error",
             error: error instanceof Error ? error.name : "unknown",
-          }),
+          }) + "\n",
         );
         return;
       }
@@ -292,7 +293,7 @@ try {
         : job.gold.length === 1 && matches(plan, job, job.gold[0]!)
           ? "correct"
           : "wrong";
-      console.log(
+      process.stdout.write(
         JSON.stringify({
           name: job.name,
           split: job.split,
@@ -303,7 +304,7 @@ try {
           target: plan?.nodeId,
           ms: response?.durationMs,
           usage: response?.usage,
-        }),
+        }) + "\n",
       );
     }
     for (const round of [1, 2]) {

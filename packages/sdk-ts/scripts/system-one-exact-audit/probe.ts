@@ -184,7 +184,7 @@ for (const { name, expected, candidates } of cases) {
   const ids = candidates.map((source) => source.id);
   assert.equal(ids.length, new Set(ids).size, name);
   assert(expected === "none" || ids.includes(expected), name);
-  if (!live) console.log(JSON.stringify({ name, expected, candidates }));
+  if (!live) process.stdout.write(JSON.stringify({ name, expected, candidates }) + "\n");
 }
 if (!live) process.exit(0);
 
@@ -233,7 +233,7 @@ async function work() {
           );
         const rawCorrect = desired ? first?.text === desired.value : !first;
         const decision = matched?.id ?? "none";
-        console.log(
+        process.stdout.write(
           JSON.stringify({
             name,
             model,
@@ -246,7 +246,7 @@ async function work() {
             spans,
             ms: Math.round(performance.now() - started),
             usage: result.usage,
-          }),
+          }) + "\n",
         );
       } else {
         const questions: Record<string, DecisionQuestion> = {
@@ -279,7 +279,7 @@ async function work() {
         );
         const decision =
           supported.length === 1 && supported[0]?.[0] === choice.choice ? choice.choice : "none";
-        console.log(
+        process.stdout.write(
           JSON.stringify({
             name,
             model,
@@ -291,11 +291,11 @@ async function work() {
             correct: decision === expected,
             ms: Math.round(performance.now() - started),
             usage: result.usage,
-          }),
+          }) + "\n",
         );
       }
     } catch (error) {
-      console.log(
+      process.stdout.write(
         JSON.stringify({
           name,
           model,
@@ -304,7 +304,7 @@ async function work() {
           error:
             error instanceof DecisionRequestError ? (error.status ?? error.name) : "local_error",
           ms: Math.round(performance.now() - started),
-        }),
+        }) + "\n",
       );
     }
   }
