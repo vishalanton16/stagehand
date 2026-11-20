@@ -1,0 +1,35 @@
+{
+  "iframe": {
+    "path": "system-one-corpus/decisions-beta-93b9d9132-capture/1d5dc0f65a4941b3b7c3589668f45ecab8dad09d533bcaa277a83101bd01fcb0.json",
+    "sha256": "1d5dc0f65a4941b3b7c3589668f45ecab8dad09d533bcaa277a83101bd01fcb0",
+    "cases": [
+      ["Click the HTML Input Types link in the HTML FORMS section.", "4-3276"],
+      ["Click the HTML Canvas link under HTML GRAPHICS.", "4-3312"],
+      ["Click the HTML Input Attributes link in the HTML GRAPHICS section.", null],
+      ["Click the HTML Canvas link in the HTML FORMS section.", null],
+      ["Click the HTML YouTube link under HTML MEDIA.", "4-3355"],
+      ["Click the HTML Project VIII link in the HTML GRAPHICS section.", null]
+    ]
+  },
+  "weather": {
+    "path": "system-one-corpus/decisions-beta-93b9d9132-capture-v2/05f336eb55292fbc36ca36bb86bfe912260479cc6abe87eab065862c1985db31.json",
+    "sha256": "05f336eb55292fbc36ca36bb86bfe912260479cc6abe87eab065862c1985db31",
+    "cases": [
+      ["Click the Weather.gov link under The National Weather Service (NWS).", "1-276"],
+      ["Click the Glossary link in the NWS Partners section.", null],
+      ["Click the About Us link under NWS Partners.", null],
+      ["Click the ABOUT RSS Feed link in the NWS Partners section.", null],
+      ["Click the National Oceanic and Atmospheric Administration link in the NWS Mission section.", null],
+      ["Click the Weather.gov link in the NWS Vision section.", null]
+    ]
+  },
+  "django": {
+    "path": "system-one-corpus/runs/act/confirmation2-capture-20261115/django.json",
+    "sha256": "8f47e16e2af5c74fb5e823c28ccd2cf73ed8646e066fb3720e454d06bfa605d7",
+    "cases": [
+      ["Click the Quarterly contributor outreach title link.", "0-226"],
+      ["Click the Discord - Chat with us title link.", "0-188"],
+      ["Click the Forum - Post a question title link.", "0-181"]
+    ]
+  }
+}
