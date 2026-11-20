@@ -1,0 +1,68 @@
+{
+  "sqlite": {
+    "split": "section-development",
+    "sha256": "22f71afca3b0dc430d1bd0eb0bc97c8fd4baff3c397e9ed0c52f1d225117fdde",
+    "cases": [
+      ["Click the fopen() link in Situations Where SQLite Works Well.", ["0-282"]],
+      ["Open the Fossil link in the SQLite Archives example.", ["0-254"]],
+      ["Click the application server link in the database engine checklist.", ["0-390"]],
+      ["Click the fopen() link in the database engine checklist.", []],
+      ["Click the fopen() link.", []]
+    ]
+  },
+  "github-readme": {
+    "split": "section-development",
+    "sha256": "0c38076fba9dae90bcfc64dd20a7decbf6b6d02e5f32fb38459ea0fc7b564968",
+    "cases": [
+      ["Click the About READMEs link in the In This Article table of contents.", ["0-1105"]],
+      ["Click the About READMEs permalink on the article's section heading.", ["0-1139"]],
+      ["Open Section links from the paragraph in the Section links in markdown files and blob pages section.", ["0-1192"]],
+      ["Click the About READMEs link in Further reading.", []],
+      ["Click the About READMEs link.", []]
+    ]
+  },
+  "mdn-section": {
+    "split": "section-development",
+    "sha256": "afde88486dd5bad54f9dcfe99e8a6aae9f58653b1f6dd33d3aca5cacd4ff888f",
+    "cases": [
+      ["Click Attributes in the In this article list.", ["3-1013"]],
+      ["Click the Global attributes link in the body of the Attributes section.", ["3-1066"]],
+      ["Click the <nav> link in the Usage notes prose.", ["3-1083"]],
+      ["Click the Global attributes link in Usage notes.", []],
+      ["Click the Global attributes link.", []]
+    ]
+  },
+  "wcag": {
+    "split": "section-confirmation",
+    "sha256": "ace7e04d1c62cd8b983603f9ef6319bae42415f2fe01fc503d4d47aa7741663a",
+    "cases": [
+      ["Click WCAG 2.2 in the WCAG 2.0, 2.1, 2.2 section.", ["0-589"]],
+      ["Click the WCAG 2 FAQ link under Frequently asked questions.", ["0-690"]],
+      ["Open the WCAG 2.2 Standard link from the Summary's quick links.", ["0-414"]],
+      ["Click the WCAG 2 FAQ link in Translations.", []],
+      ["Click the WCAG 2 FAQ link.", []]
+    ]
+  },
+  "git-switch": {
+    "split": "section-confirmation",
+    "sha256": "018c70c8973e334f437eb07161ac1bcf0c883a100b629d9370397004dcb074e9",
+    "cases": [
+      ["Click git-checkout in the See Also section.", ["0-1667"]],
+      ["Click the git-checkout link in the Options section.", ["0-1052"]],
+      ["Click the git-config link in the opening Configuration paragraph.", ["0-1512"]],
+      ["Click the git-submodule link in See Also.", []],
+      ["Click the git-checkout link.", []]
+    ]
+  },
+  "python-tutorial": {
+    "split": "section-confirmation",
+    "sha256": "2f84f7f9e5f96b63daa5d64aff5ea6b117d39d4fca366f784780513771186991",
+    "cases": [
+      ["Click Whetting Your Appetite under Next topic in the sidebar.", ["0-1396"]],
+      ["Click Whetting Your Appetite in the main tutorial's chapter list.", ["0-768"]],
+      ["Click the Changelog link under Previous topic.", ["0-1390"]],
+      ["Click Changelog in the Next topic block.", []],
+      ["Click the modules link.", []]
+    ]
+  }
+}
