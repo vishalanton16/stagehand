@@ -1,5 +1,5 @@
 import type { Protocol } from "devtools-protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { StagehandLogger } from "../logger.js";
 import type { CDPSessionLike, CdpConnection } from "../understudy/cdp.js";
 import { executionContexts } from "../understudy/executionContextRegistry.js";
@@ -9,6 +9,7 @@ const MAIN_FRAME_ID = "frame-1";
 
 type NavigationOptions = {
   emitResponse?: boolean;
+  emitLifecycle?: boolean;
   finalUrl?: string;
   finishAfterLifecycle?: boolean;
   omitLoaderId?: boolean;
@@ -153,12 +154,14 @@ class NavigationCDPSession implements CDPSessionLike {
         });
       };
       if (!options.finishAfterLifecycle) emitFinished();
-      this.emit<Protocol.Page.LifecycleEventEvent>("Page.lifecycleEvent", {
-        frameId: MAIN_FRAME_ID,
-        loaderId,
-        name: "DOMContentLoaded",
-        timestamp: sequence,
-      });
+      if (options.emitLifecycle !== false) {
+        this.emit<Protocol.Page.LifecycleEventEvent>("Page.lifecycleEvent", {
+          frameId: MAIN_FRAME_ID,
+          loaderId,
+          name: "DOMContentLoaded",
+          timestamp: sequence,
+        });
+      }
       if (options.finishAfterLifecycle) setTimeout(emitFinished, 0);
     }, 0);
 
@@ -305,5 +308,117 @@ describe("Page navigation responses", () => {
     const page = createPage(session);
 
     await expect(page.goto("https://example.test/current#details")).resolves.toBeNull();
+  });
+});
+
+describe("Page navigation deadlines", () => {
+  it("times out while waiting for Page.navigate and releases the watcher", async () => {
+    vi.useFakeTimers();
+    try {
+      const session = new NavigationCDPSession();
+      const send = session.send.bind(session);
+      vi.spyOn(session, "send").mockImplementation((method, params) => {
+        if (method === "Page.navigate") return new Promise(() => {});
+        return send(method, params);
+      });
+      const page = createPage(session);
+      const frameListeners = session.handlers.get("Page.frameNavigated")?.size ?? 0;
+      const responseListeners = session.handlers.get("Network.responseReceived")?.size ?? 0;
+      const pending = page.goto("https://example.test/slow-headers", { timeout: 100 });
+      const outcome = pending.catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      const error = await Promise.race([outcome, Promise.resolve("pending")]);
+      expect(error).toMatchObject({ message: "Navigation command timed out after 100ms" });
+      expect(session.handlers.get("Page.frameNavigated")?.size ?? 0).toBe(frameListeners);
+      expect(session.handlers.get("Network.responseReceived")?.size ?? 0).toBe(responseListeners);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("deducts a delayed command response from the lifecycle budget", async () => {
+    vi.useFakeTimers();
+    try {
+      const session = new NavigationCDPSession();
+      session.readyState = "loading";
+      session.navigationOptions = { emitLifecycle: false };
+      const send = session.send.bind(session);
+      vi.spyOn(session, "send").mockImplementation(async (method, params) => {
+        if (method === "Page.navigate") {
+          await new Promise((resolve) => setTimeout(resolve, 75));
+        }
+        return send(method, params);
+      });
+      const page = createPage(session);
+      const pending = page.goto("https://example.test/slow-body", { timeout: 100 });
+      const outcome = pending.catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      const error = await Promise.race([outcome, Promise.resolve("pending")]);
+      expect(error).toMatchObject({ message: "domcontentloaded timed out after 100ms" });
+      expect(session.handlers.get("Page.lifecycleEvent")?.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("observes lifecycle events while a ready-state probe is stalled", async () => {
+    vi.useFakeTimers();
+    try {
+      const session = new NavigationCDPSession();
+      session.navigationOptions = { emitLifecycle: false };
+      const send = session.send.bind(session);
+      vi.spyOn(session, "send").mockImplementation((method, params) => {
+        if (method === "Runtime.evaluate") return new Promise(() => {});
+        return send(method, params);
+      });
+      const page = createPage(session);
+      const pending = page.goto("https://example.test", { timeout: 100 });
+      const outcome = pending.catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(1);
+      session.emit("Page.lifecycleEvent", {
+        frameId: MAIN_FRAME_ID,
+        name: "DOMContentLoaded",
+      });
+      await vi.advanceTimersByTimeAsync(1);
+
+      const response = await Promise.race([outcome, Promise.resolve("pending")]);
+      expect(response).toMatchObject({ status: expect.any(Function) });
+      expect(session.handlers.get("Page.lifecycleEvent")?.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let a superseded command's late reply overwrite the current URL", async () => {
+    const session = new NavigationCDPSession();
+    const send = session.send.bind(session);
+    let release!: (response: Protocol.Page.NavigateResponse) => void;
+    const oldReply = new Promise<Protocol.Page.NavigateResponse>((resolve) => {
+      release = resolve;
+    });
+    const oldUrl = "https://example.test/old";
+    const newUrl = "https://example.test/new";
+    vi.spyOn(session, "send").mockImplementation((method, params) => {
+      if (method === "Page.navigate" && (params as { url?: string })?.url === oldUrl) {
+        return oldReply;
+      }
+      return send(method, params);
+    });
+    const page = createPage(session);
+    const oldNavigation = page.goto(oldUrl);
+    const superseded = expect(oldNavigation).rejects.toThrow(
+      "Navigation was superseded by a new request",
+    );
+
+    await expect(page.goto(newUrl)).resolves.toMatchObject({ status: expect.any(Function) });
+    release({ frameId: MAIN_FRAME_ID, loaderId: "stale" });
+
+    await superseded;
+    expect(page.url()).toBe(newUrl);
   });
 });

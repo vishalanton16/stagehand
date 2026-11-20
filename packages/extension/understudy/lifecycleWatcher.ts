@@ -105,9 +105,22 @@ export class LifecycleWatcher {
     this.idleStartTime = Date.now();
   }
 
+  /** The CDP navigation command can wait for the response headers. */
+  public async waitForCommand<T>(command: () => Promise<T>): Promise<T> {
+    const result = await this.awaitWithDeadline(
+      command,
+      this.startTime + this.timeout,
+      "Navigation command",
+    );
+    if (this.isSuperseded()) {
+      throw new Error("Navigation was superseded by a new request");
+    }
+    return result;
+  }
+
   /** Wait for the requested lifecycle state or throw on timeout/abort. */
   public async wait(): Promise<void> {
-    const deadline = Date.now() + this.timeout;
+    const deadline = this.startTime + this.timeout;
 
     try {
       const sameDocument = await this.awaitNavigationStart(deadline);
@@ -233,16 +246,24 @@ export class LifecycleWatcher {
   async awaitNavigationStart(deadline: number): Promise<boolean> {
     if (this.navigationStarted) return this.sameDocumentNavigation;
 
+    return this.awaitWithDeadline(() => this.navigationStartPromise, deadline, "Navigation start");
+  }
+
+  async awaitWithDeadline<T>(
+    operation: () => Promise<T>,
+    deadline: number,
+    phase: string,
+  ): Promise<T> {
     const remaining = this.timeRemaining(deadline);
     let timer: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        reject(new TimeoutError("Navigation start", this.timeout));
+        reject(new TimeoutError(phase, this.timeout));
       }, remaining);
     });
 
     try {
-      return await this.awaitWithAbort(Promise.race([this.navigationStartPromise, timeoutPromise]));
+      return await this.awaitWithAbort(Promise.race([operation(), timeoutPromise]));
     } finally {
       if (timer) clearTimeout(timer);
     }

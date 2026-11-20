@@ -68,6 +68,10 @@ export async function initStagehand({
   modelName,
   environment,
 }: InitStagehandArgs): Promise<StagehandInitResult> {
+  const fixtureIndex = process.env.STAGEHAND_EVAL_FIXTURE_INDEX;
+  if (fixtureIndex && environment !== "LOCAL") {
+    throw new Error("STAGEHAND_EVAL_FIXTURE_INDEX requires a local benchmark browser");
+  }
   const provider = modelName.includes("/") ? modelName.split("/")[0].toLowerCase() : undefined;
   const keyEnvVars = provider ? (PROVIDER_API_KEY_ENV[provider] ?? []) : [];
   const apiKey = keyEnvVars.map((name) => resolveKey(name).value).find(Boolean);
@@ -123,8 +127,10 @@ export async function initStagehand({
   // without this a failed task leaks a Chrome process (LOCAL) or a live
   // Browserbase session (BROWSERBASE) for the rest of the run.
   let stagehand: Stagehand | undefined;
+  let detachFixtureReplay: (() => Promise<void>) | undefined;
   const cleanupOwnedResources = onceAsync(async () => {
     await stagehand?.close().catch(() => {});
+    await detachFixtureReplay?.().catch(() => {});
     await browser.close().catch(() => {});
     await endSession().catch(() => {});
   });
@@ -135,6 +141,13 @@ export async function initStagehand({
   };
 
   try {
+    if (fixtureIndex) {
+      const { attachFixtureReplay, loadFixtureReplay } =
+        await import("./framework/fixtureReplay.js");
+      if (!browser.cdpUrl) throw new Error("Fixture replay requires a local browser CDP URL");
+      const documents = await loadFixtureReplay(fixtureIndex);
+      detachFixtureReplay = await attachFixtureReplay(browser.cdpUrl, documents);
+    }
     stagehand = await Stagehand.create({
       browser,
       systemPrompt: EVAL_SYSTEM_PROMPT,

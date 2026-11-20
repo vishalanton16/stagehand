@@ -1,12 +1,22 @@
 import { defineBenchTask } from "../../../framework/defineTask.js";
-import { matchingSelector } from "../../../framework/observeSelectors.js";
+
+const companyLinks = String.raw`Array.from(document.querySelectorAll("main a[href]")).filter(
+  (link) => link.origin === location.origin &&
+    /^\/companies\/[^/]+\/?$/.test(link.pathname) &&
+    link.getClientRects().length > 0 &&
+    link.textContent.trim().length > 0
+)`;
 
 export default defineBenchTask(
   { name: "observe_yc_startup" },
   async ({ debugUrl, sessionUrl, stagehand, page, logger }) => {
     try {
       await page.goto("https://www.ycombinator.com/companies", {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForFunction(`${companyLinks}.length >= 2`, undefined, {
+        timeout: 15_000,
+        polling: 100,
       });
 
       const { data: observations } = await stagehand.observe(
@@ -23,37 +33,31 @@ export default defineBenchTask(
         };
       }
 
-      const possibleLocators = [
-        `div._rightCol_18olp_594`,
-        `div._section_18olp_165._results_18olp_345`,
-      ];
-
-      // v3 compares backendNodeIds; the v4 Locator exposes no node identity
-      // so the same element-identity check is
-      // re-expressed in-page: resolve the observed selector and each
-      // candidate selector and compare element references.
-      let foundMatch = false;
-      let matchedLocator: string | null = null;
-
-      for (const observation of observations) {
-        try {
-          const matched = await matchingSelector(page, observation.selector, possibleLocators);
-          if (matched) {
-            foundMatch = true;
-            matchedLocator = matched;
-            break;
-          }
-        } catch (error) {
-          console.warn(
-            `Failed to check observation with selector ${observation.selector}:`,
-            error instanceof Error ? error.message : String(error),
-          );
-          continue;
+      // The directory's generated class names change between releases.
+      const matchedLocator = await page.evaluate<string | null>(`(() => {
+        const links = ${companyLinks};
+        if (links.length < 2) return null;
+        let container = links[0].parentElement;
+        while (container && !links.every((link) => container.contains(link))) {
+          container = container.parentElement;
         }
-      }
+        if (!container) return null;
+        const selectors = ${JSON.stringify(observations.map(({ selector }) => selector))};
+        return selectors.find((selector) => {
+          const raw = selector.startsWith("xpath=") ? selector.slice(6) : selector;
+          try {
+            const element = raw.startsWith("/") || raw.startsWith("(")
+              ? document.evaluate(raw, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue
+              : document.querySelector(raw);
+            return element === container;
+          } catch {
+            return false;
+          }
+        }) ?? null;
+      })()`);
 
       return {
-        _success: foundMatch,
+        _success: matchedLocator !== null,
         matchedLocator,
         observations,
         debugUrl,

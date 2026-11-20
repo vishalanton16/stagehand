@@ -1302,9 +1302,8 @@ export class Page {
     });
 
     try {
-      const response = await this.mainSession.send<Protocol.Page.NavigateResponse>(
-        "Page.navigate",
-        { url },
+      const response = await watcher.waitForCommand(() =>
+        this.mainSession.send<Protocol.Page.NavigateResponse>("Page.navigate", { url }),
       );
       this._currentUrl = url;
       if (response?.loaderId) {
@@ -1351,9 +1350,9 @@ export class Page {
     });
 
     try {
-      await this.mainSession.send("Page.reload", {
-        ignoreCache: options?.ignoreCache ?? false,
-      });
+      await watcher.waitForCommand(() =>
+        this.mainSession.send("Page.reload", { ignoreCache: options?.ignoreCache ?? false }),
+      );
 
       await watcher.wait();
       return await tracker.navigationCompleted();
@@ -1395,9 +1394,9 @@ export class Page {
     });
 
     try {
-      await this.mainSession.send("Page.navigateToHistoryEntry", {
-        entryId: prev.id,
-      });
+      await watcher.waitForCommand(() =>
+        this.mainSession.send("Page.navigateToHistoryEntry", { entryId: prev.id }),
+      );
       this._currentUrl = prev.url ?? this._currentUrl;
 
       await watcher.wait();
@@ -1440,9 +1439,9 @@ export class Page {
     });
 
     try {
-      await this.mainSession.send("Page.navigateToHistoryEntry", {
-        entryId: next.id,
-      });
+      await watcher.waitForCommand(() =>
+        this.mainSession.send("Page.navigateToHistoryEntry", { entryId: next.id }),
+      );
       this._currentUrl = next.url ?? this._currentUrl;
 
       await watcher.wait();
@@ -2714,24 +2713,11 @@ export class Page {
    *   to `mainFrameId()` **at event time** to follow root swaps.
    */
   async waitForMainLoadState(state: LoadState, timeout = 15000): Promise<void> {
-    await this.mainSession
-      .send("Page.setLifecycleEventsEnabled", { enabled: true })
-      .catch(() => {});
-
-    // Fast path: check the *current* main frame's readyState.
-    if (
-      (state === "domcontentloaded" || state === "load") &&
-      (await this.isMainLoadStateReady(state))
-    ) {
-      return;
-    }
-
     const wanted = LIFECYCLE_NAME[state];
     return new Promise<void>((resolve, reject) => {
       let done = false;
       let timer: ReturnType<typeof setTimeout> | null = null;
       let pollTimer: ReturnType<typeof setTimeout> | null = null;
-      let pollInFlight = false;
 
       const off = () => {
         this.mainSession.off("Page.lifecycleEvent", onLifecycle);
@@ -2776,32 +2762,6 @@ export class Page {
       this.mainSession.on("Page.domContentEventFired", onDomContent);
       this.mainSession.on("Page.loadEventFired", onLoad);
 
-      // Fallback polling closes lifecycle-event races in remote environments
-      // where readyState has advanced but the corresponding event was missed.
-      const pollReadyState = async () => {
-        if (done || pollInFlight) return;
-        pollInFlight = true;
-        try {
-          if (done) return;
-          if (
-            (state === "domcontentloaded" || state === "load") &&
-            (await this.isMainLoadStateReady(state))
-          ) {
-            finish();
-            return;
-          }
-        } finally {
-          pollInFlight = false;
-        }
-        if (!done) {
-          clearPollTimer();
-          pollTimer = setTimeout(() => {
-            void pollReadyState();
-          }, 100);
-        }
-      };
-      void pollReadyState();
-
       timer = setTimeout(() => {
         if (done) return;
         done = true;
@@ -2809,6 +2769,18 @@ export class Page {
         off();
         reject(new TimeoutError(`waitForMainLoadState(${state})`, timeout));
       }, timeout);
+
+      if (state !== "networkidle") {
+        // Poll for missed lifecycle events without blocking the event listener.
+        const pollReadyState = async () => {
+          if (await this.isMainLoadStateReady(state)) {
+            finish();
+          } else if (!done) {
+            pollTimer = setTimeout(() => void pollReadyState(), 100);
+          }
+        };
+        void pollReadyState();
+      }
     });
   }
 }

@@ -87,6 +87,8 @@ Concurrency is capped per model provider under the global `-c` value (default 3 
 
 Team defaults live in the tracked `evals.config.json` (schema v2: `defaults`, `benchmarks`, `harnesses`, `providers`, `verifier`, `campaign`). `evals config set …` writes your personal overrides to the gitignored `evals.config.local.json` beside it; add `--shared` to change the team file. Flags always win. Most `defaults` then come from the local file, the tracked file and the `EVAL_*` env vars in that order; `EVAL_SUCCESS_MODE` and `STAGEHAND_BROWSER_TARGET` are the exceptions and beat the config, as does the env twin of every other section. `.env` loads from the cwd first (it wins), then `packages/evals/.env` (where `evals setup` saves keys), and shell exports always win — `evals doctor` reports which file supplied each provider key.
 
+Local v4 benchmarks can replay captured HTML with `STAGEHAND_EVAL_FIXTURE_INDEX=/path/to/capture-index.json`. The index is a JSON array of objects with `url`, `file` (a gzip-compressed HTML file relative to the index) and `sha256` (the digest of the uncompressed HTML). Capture each document the task navigates to, including follow-up pages. Replay serves exact document URLs and leaves other requests live. Record the index used with benchmark results since replay changes page delivery.
+
 `--preview` is useful for sanity-checking the plan before paying for a run:
 
 ![evals run --preview output](./assets/readme/preview.png)
