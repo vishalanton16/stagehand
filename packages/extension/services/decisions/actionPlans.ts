@@ -10,6 +10,7 @@ import {
 } from "./tree.js";
 import { choiceAnswer, decide, type DecisionModelConfig, type JsonValue } from "./client.js";
 import type { ElementFacts } from "./actionFacts.js";
+import { actionContext, normalizeActionHeading, type StructuralEvidence } from "./actionContext.js";
 
 export type ActionSnapshot = {
   formattedTree: string;
@@ -119,11 +120,22 @@ export function candidates(
     );
   });
   const scores = scoreCandidates(nodes, eligible, instruction);
-  const selected = eligible
-    .toSorted((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) || a.index - b.index)
-    .slice(0, limit)
-    .sort((a, b) => a.index - b.index);
-  return { nodes, eligible, selected };
+  const context = kind === "pointer" ? actionContext(snapshot, nodes, instruction) : undefined;
+  const structural = new Set<string>();
+  if (context) {
+    for (const node of eligible) {
+      const evidence = context(node);
+      if (evidence && (!("inSection" in evidence) || evidence.inSection)) structural.add(node.id);
+    }
+  }
+  const ranked = eligible.toSorted(
+    (a, b) =>
+      Number(structural.has(b.id)) - Number(structural.has(a.id)) ||
+      (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0) ||
+      a.index - b.index,
+  );
+  const selected = ranked.slice(0, limit).sort((a, b) => a.index - b.index);
+  return { nodes, eligible, selected, context };
 }
 
 export function evidence(
@@ -132,9 +144,20 @@ export function evidence(
   node: OutlineNode,
   compact: boolean,
   includeDestination = true,
+  context?: StructuralEvidence,
 ): Record<string, JsonValue> {
   const full = describeCandidate(nodes, node);
-  if (!compact) return full;
+  const title = context && "title_link" in context ? context : undefined;
+  if (context && "inSection" in context) {
+    if (context.inSection) full.under_heading = context.section;
+    else if (
+      typeof full.under_heading === "string" &&
+      normalizeActionHeading(full.under_heading) === normalizeActionHeading(context.section)
+    ) {
+      full.under_heading = `Outside ${context.section}`;
+    }
+  }
+  if (!compact) return title ? { ...full, ...title } : full;
   const fact = snapshot.facts[node.id]!;
   return {
     role: node.role,
@@ -145,6 +168,7 @@ export function evidence(
     ...(full.occurrence ? { occurrence: full.occurrence } : {}),
     ...(includeDestination && fact.href ? { destination: fact.href.slice(0, 240) } : {}),
     ...(fact.checked !== undefined ? { checked: fact.checked } : {}),
+    ...title,
   };
 }
 
@@ -164,7 +188,14 @@ export function buildPlans(
       nodeId: node.id,
       method: "click",
       arguments: [],
-      evidence: evidence(snapshot, pointer.nodes, node, compact, includeDestination),
+      evidence: evidence(
+        snapshot,
+        pointer.nodes,
+        node,
+        compact,
+        includeDestination,
+        pointer.context?.(node),
+      ),
     });
   for (const value of values)
     for (const node of input.selected)

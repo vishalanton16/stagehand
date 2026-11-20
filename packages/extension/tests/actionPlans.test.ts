@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   actionNodes,
   buildPlans,
+  candidates,
   choosePlan,
   type ActionSnapshot,
 } from "../services/decisions/actionPlans.js";
@@ -43,6 +44,36 @@ function snapshot(): ActionSnapshot {
       "0-2": facts({ href: "https://example.org/details" }),
       "0-3": facts({ tag: "input", editable: true, text: "", value: "" }),
     },
+  };
+}
+
+function sectionSnapshot(): ActionSnapshot {
+  return {
+    ...snapshot(),
+    formattedTree: [
+      "[0-1] RootWebArea: Directory",
+      "  [0-4] heading: Reading",
+      "  [0-2] link: Details",
+      "  [0-5] link: Details",
+      "  [0-6] heading: Tools",
+      "  [0-7] link: Details",
+    ].join("\n"),
+    xpathMap: {
+      "0-1": "/",
+      "0-4": "/html/body/main/h2[1]",
+      "0-2": "/html/body/main/p/a",
+      "0-5": "/html/body/main/nav/a",
+      "0-6": "/html/body/main/h2[2]",
+      "0-7": "/html/body/main/ul/li/a",
+    },
+    facts: {
+      "0-4": facts({ tag: "h2", text: "Reading" }),
+      "0-2": facts({ text: "Details" }),
+      "0-5": facts({ text: "Details" }),
+      "0-6": facts({ tag: "h2", text: "Tools" }),
+      "0-7": facts({ text: "Details" }),
+    },
+    editableIds: [],
   };
 }
 
@@ -282,6 +313,60 @@ function dependencies(page = snapshot()) {
   return { deps, takeAction, evaluate, locator };
 }
 
+describe("structural click evidence", () => {
+  it("prioritizes the section's own links and corrects inherited navigation headings", () => {
+    const page = sectionSnapshot();
+    const instruction = "Click the Details link in the Reading section.";
+
+    expect(candidates(page, instruction, "pointer", 1).selected.map(({ id }) => id)).toEqual([
+      "0-2",
+    ]);
+    const plans = buildPlans(page, instruction);
+    expect(plans.map(({ nodeId }) => nodeId)).toEqual(["0-2", "0-5", "0-7"]);
+    expect(plans.map(({ evidence }) => evidence.heading)).toEqual([
+      "Reading",
+      "Outside Reading",
+      "Tools",
+    ]);
+    expect(
+      buildPlans(page, "Click the Details link.").map(({ evidence }) => evidence.heading),
+    ).toEqual(["Reading", "Reading", "Tools"]);
+  });
+
+  it("keeps the original evidence for a repeated heading", () => {
+    const page = sectionSnapshot();
+    page.formattedTree = page.formattedTree.replace("heading: Tools", "heading: Reading");
+    page.facts["0-6"] = facts({ tag: "h2", text: "Reading" });
+
+    expect(buildPlans(page, "Click the Details link under Reading.")).toEqual(
+      buildPlans(page, "Click the Details link."),
+    );
+  });
+
+  it("prefers native title links and exposes the full DOM title", () => {
+    const page = sectionSnapshot();
+    page.formattedTree = [
+      "[0-1] RootWebArea: Directory",
+      "  [0-2] link: Full story",
+      "  [0-4] heading: Full story...",
+      "    [0-5] link: Full story...",
+    ].join("\n");
+    page.xpathMap["0-5"] = "/html/body/main/h2[1]/a";
+    page.facts["0-4"] = facts({ tag: "h2", text: "Full story..." });
+    page.facts["0-5"] = facts({ title: "Full story about otters" });
+    const instruction = "Open the Full story about otters title link.";
+
+    expect(candidates(page, instruction, "pointer", 1).selected.map(({ id }) => id)).toEqual([
+      "0-5",
+    ]);
+    const [, title] = buildPlans(page, instruction);
+    expect(title?.evidence).toMatchObject({ title_link: true, title: "Full story about otters" });
+    expect(buildPlans(page, 'Open "Full story title link".')[1]?.evidence).not.toHaveProperty(
+      "title_link",
+    );
+  });
+});
+
 describe("action execution guards", () => {
   it("executes a recovered editor using the DOM element's backend identity", async () => {
     provider("action_0");
@@ -345,6 +430,40 @@ describe("action execution guards", () => {
       expect(takeAction).not.toHaveBeenCalled();
     },
   );
+
+  it("executes a section link when its structural evidence survives refresh", async () => {
+    provider("action_0");
+    const { deps, takeAction } = dependencies(sectionSnapshot());
+    deps.instruction = "Click the Details link in the Reading section.";
+
+    expect(await runDecisionsAct(config, deps)).toMatchObject({ kind: "done" });
+    expect(takeAction).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ selector: "xpath=/html/body/main/p/a", method: "click" }),
+      "0-2",
+    );
+  });
+
+  it("rejects a section link that moved out of the heading's DOM range", async () => {
+    provider("action_0");
+    const page = sectionSnapshot();
+    const { deps, takeAction } = dependencies(page);
+    deps.instruction = "Click the Details link in the Reading section.";
+    const initial = await deps.page.captureSnapshot({}, deps.progress);
+    const { ["0-2"]: targetPath, ...rest } = initial.combinedXpathMap;
+    deps.page.captureSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce({
+        ...initial,
+        combinedXpathMap: { ...rest, "0-2": targetPath },
+      });
+
+    expect(await runDecisionsAct(config, deps)).toMatchObject({
+      kind: "fallback",
+      reason: "action_plan_evidence_changed",
+    });
+    expect(takeAction).not.toHaveBeenCalled();
+  });
 
   it("executes a checked complete action exactly once", async () => {
     provider("action_0");

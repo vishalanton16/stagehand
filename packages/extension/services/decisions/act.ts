@@ -5,6 +5,7 @@ import type { Progress } from "../../understudy/progress.js";
 import { resolveLocatorWithHops } from "../../understudy/deepLocator.js";
 import { trimTrailingTextNode } from "../../utils.js";
 import { actionNodes, choosePlan, evidence } from "./actionPlans.js";
+import { actionContext } from "./actionContext.js";
 import { readFacts } from "./actionFacts.js";
 import { checkSelectedTarget } from "./actionTarget.js";
 import { redactor, substituteVariables } from "./args.js";
@@ -95,11 +96,16 @@ export async function runDecisionsAct(
     };
     const refreshedNodes = actionNodes(refreshedView);
     const refreshedTarget = refreshedNodes.find((node) => node.id === plan.nodeId);
+    const refreshedContext =
+      refreshedTarget && plan.method === "click"
+        ? actionContext(refreshedView, refreshedNodes, deps.instruction)?.(refreshedTarget)
+        : undefined;
     if (
       !refreshedTarget ||
       refreshed.combinedXpathMap[plan.nodeId] !== view.xpathMap[plan.nodeId] ||
-      JSON.stringify(evidence(refreshedView, refreshedNodes, refreshedTarget, true)) !==
-        JSON.stringify(plan.evidence)
+      JSON.stringify(
+        evidence(refreshedView, refreshedNodes, refreshedTarget, true, true, refreshedContext),
+      ) !== JSON.stringify(plan.evidence)
     )
       return { kind: "fallback", reason: "action_plan_evidence_changed" };
     deps.progress.throwIfStopped();

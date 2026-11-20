@@ -19,7 +19,10 @@
       ["Click the Glossary link in the NWS Partners section.", null],
       ["Click the About Us link under NWS Partners.", null],
       ["Click the ABOUT RSS Feed link in the NWS Partners section.", null],
-      ["Click the National Oceanic and Atmospheric Administration link in the NWS Mission section.", null],
+      [
+        "Click the National Oceanic and Atmospheric Administration link in the NWS Mission section.",
+        null
+      ],
       ["Click the Weather.gov link in the NWS Vision section.", null]
     ]
   },
