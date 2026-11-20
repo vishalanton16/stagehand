@@ -68,6 +68,52 @@ export function describeGroup(view: DataView, group: Group): string {
   return `${group.records.length} items${where}. ${examples}`;
 }
 
+function recoveryGroup(view: DataView, shortlist: Group[], instruction: string): Group | undefined {
+  const normalize = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  const request = ` ${normalize(
+    instruction.split(
+      /\b(?:exclude|excluding|except|omit|leave out|do not include|without)\b/i,
+      1,
+    )[0]!,
+  )} `;
+  const headings = new Set(
+    view.nodes
+      .filter((node) => node.role.toLowerCase() === "heading" && tokens(node.name).size >= 2)
+      .map((node) => normalize(node.name)),
+  );
+  const tableRequested = /\btables?\b/.test(request);
+  const matches = view.groups.filter((group) => {
+    if (
+      group.records.length < 2 ||
+      group.records.length > 50 ||
+      !group.records.every((record) => record.parent === group.records[0]!.parent) ||
+      !group.slots.some((slot) => slot.coverage === 1)
+    )
+      return false;
+    const role = group.role;
+    if (tableRequested ? role !== "row" : !/^(listitem|term)$/.test(role)) return false;
+    const title = normalize(
+      (group.sections.length === 1 ? group.sections[0] : undefined) ??
+        (group.context.every((label) => label === group.context[0])
+          ? group.context[0]
+          : undefined) ??
+        "",
+    );
+    if (!headings.has(title)) return false;
+    return ["in", "under", "from"].some(
+      (scope) =>
+        request.includes(` ${scope} ${title} `) || request.includes(` ${scope} the ${title} `),
+    );
+  });
+  // A second request can surface a group that retrieval missed. A rejected
+  // group already seen by the provider, or several matching groups, stay unresolved.
+  return matches.length === 1 && !shortlist.includes(matches[0]!) ? matches[0] : undefined;
+}
+
 function buildListMapping(view: DataView, list: ListPlan, instruction: string, group: Group) {
   const hasNumericField = list.fields.some(
     (field) => field.type === "number" || field.type === "integer",
@@ -171,10 +217,10 @@ async function chooseListGroup(
   instruction: string,
   groups: Group[],
   trace: TraceEntry[],
-  stopOnDisagreement: boolean,
-): Promise<Group | undefined> {
+  recovering = false,
+): Promise<{ group: Group | undefined; disagrees: boolean }> {
   const groupStarted = performance.now();
-  const questions = listGroupQuestions(view, list, instruction, groups);
+  const questions = listGroupQuestions(view, list, instruction, groups, recovering);
   const first = await ask(config, { task: instruction }, questions);
   trace.push({
     step: `${list.name}:group-ms`,
@@ -195,18 +241,31 @@ async function chooseListGroup(
     confidence: best?.yes ?? 0,
     options: groups.length,
   });
-  if (group && best && (best.id !== group.id || best.yes < 0.5)) {
-    const reason = `group-disagree:${list.name}`;
-    problem(trace, reason);
-    if (stopOnDisagreement) throw new Error(reason);
-  }
-  return group;
+  return { group, disagrees: !!group && !!best && (best.id !== group.id || best.yes < 0.5) };
 }
 
-function listGroupQuestions(view: DataView, list: ListPlan, instruction: string, groups: Group[]) {
+function listGroupQuestions(
+  view: DataView,
+  list: ListPlan,
+  instruction: string,
+  groups: Group[],
+  recovering: boolean,
+) {
   const want = list.fields.map(fieldText).join(", ");
   const listName = list.name.replaceAll("_", " ");
-  const descriptions = groups.map((group) => [group.id, describeGroup(view, group)] as const);
+  const descriptions = groups.map((group) => {
+    const description = describeGroup(view, group);
+    if (!recovering) return [group.id, description] as const;
+    const columns =
+      group.role === "row"
+        ? [...new Set(group.slots.flatMap((slot) => (slot.label ? [slot.label] : [])))]
+        : [];
+    const type = group.role === "row" ? "Table rows" : "List entries";
+    return [
+      group.id,
+      `${type}${columns.length ? ` with columns ${clip(columns.join(", "), 120)}` : ""}. ${description}`,
+    ] as const;
+  });
   const questions: Record<string, DecisionQuestion> = {
     group: {
       type: "choice",
@@ -217,7 +276,9 @@ function listGroupQuestions(view: DataView, list: ListPlan, instruction: string,
   for (const [id, description] of descriptions) {
     questions[`is_${id}`] = {
       type: "noul",
-      instructions: `Task: ${instruction}\nAre these repeated page items the "${listName}" list (each item provides: ${want})? ${description}`,
+      instructions: recovering
+        ? `Task: ${instruction}\nGroup: ${description}\nDo these records come from the requested part of the page and contain the requested values? A record may contain a value alongside its description or example.`
+        : `Task: ${instruction}\nAre these repeated page items the "${listName}" list (each item provides: ${want})? ${description}`,
     };
   }
   return questions;
@@ -233,15 +294,38 @@ export async function readList(
 ): Promise<unknown[] | undefined> {
   const groups = rankGroups(view, list, instruction);
   if (!groups.length) return undefined;
-  const group = await chooseListGroup(
-    config,
-    view,
-    list,
-    instruction,
-    groups,
-    trace,
-    stopOnDisagreement,
-  );
+  let { group, disagrees } = await chooseListGroup(config, view, list, instruction, groups, trace);
+  if (
+    (!group || disagrees) &&
+    stopOnDisagreement &&
+    list.required &&
+    list.scalarItems &&
+    list.fields[0]?.type === "string"
+  ) {
+    const retry = recoveryGroup(view, groups, instruction);
+    if (retry) {
+      trace.push({
+        step: `${list.name}:group-recovery`,
+        choice: retry.id,
+        confidence: 0,
+        options: 1,
+      });
+      ({ group, disagrees } = await chooseListGroup(
+        config,
+        view,
+        list,
+        instruction,
+        [retry],
+        trace,
+        true,
+      ));
+    }
+  }
+  if (disagrees) {
+    const reason = `group-disagree:${list.name}`;
+    problem(trace, reason);
+    if (stopOnDisagreement) throw new Error(reason);
+  }
   if (!group) return undefined;
   trace.push({
     step: `${list.name}:page-items`,

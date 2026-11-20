@@ -34,6 +34,116 @@ function scriptDecisions(
   }));
 }
 
+describe("list group recovery", () => {
+  const instruction = "List every mode name in the Operating modes table, in table order.";
+  const modes = ["Automatic", "Manual", "Standby"];
+  const table = (names: string[], id = "modes", cellRole = "cell") =>
+    [
+      `  [${id}-table] table`,
+      `    [${id}-rowgroup] rowgroup`,
+      `      [${id}-header] row`,
+      `        [${id}-mode] columnheader: Mode`,
+      `    [${id}-body] tbody`,
+      ...names.flatMap((name, index) => [
+        `      [${id}-row${index}] row`,
+        `        [${id}-cell${index}] ${cellRole}: ${name}`,
+      ]),
+    ].join("\n");
+  const clutter = [
+    "paragraph",
+    "article",
+    "group",
+    "link",
+    "button",
+    "note",
+    "image",
+    "generic",
+  ].flatMap((role) =>
+    Array.from(
+      { length: 36 },
+      (_, index) => `  [${role}${index}] ${role}: Mode names from the operating modes table`,
+    ),
+  );
+  const tree = (...tables: string[]) =>
+    [
+      "[page] document",
+      "  [heading] heading: Operating modes",
+      ...tables,
+      "  [unrelated] heading: Other material",
+      ...clutter,
+    ].join("\n");
+  const extract = (snapshot: string, task = instruction) =>
+    mapCopyExtract(
+      { apiKey: "test" },
+      { tree: snapshot, urlMap: {}, schema: listSchema, instruction: task },
+    );
+
+  it.each(["none", "disagree"])("recovers a unique omitted group after %s", async (first) => {
+    let recovering = false;
+    const decide = scriptDecisions((key, question) => {
+      if (key === "group" && question.type === "choice")
+        recovering = Object.keys(question.criteria).length === 2;
+      if (
+        key === "group" &&
+        question.type === "choice" &&
+        Object.keys(question.criteria).length > 2
+      )
+        return first === "none" ? "none" : undefined;
+      if (key.startsWith("is_") && first === "disagree") return recovering ? 1 : 0;
+      return undefined;
+    });
+    const result = await extract(tree(table(modes)));
+    const groupCalls = decide.mock.calls.filter(([, , questions]) => "group" in questions);
+    expect(groupCalls).toHaveLength(2);
+    expect(JSON.stringify(groupCalls[0]![2].group)).not.toContain("Automatic");
+    expect(JSON.stringify(groupCalls[1]![2].group)).toContain("Automatic");
+    expect(result.data.items).toEqual(modes);
+    expect(result.verdict.problems).toEqual([]);
+  });
+
+  it("falls back when the recovered group's predicate disagrees", async () => {
+    const decide = scriptDecisions((key, question) => {
+      if (
+        key === "group" &&
+        question.type === "choice" &&
+        Object.keys(question.criteria).length > 2
+      )
+        return "none";
+      if (key.startsWith("is_")) return 0.49;
+      return undefined;
+    });
+    await expect(extract(tree(table(modes)))).rejects.toThrow("group-disagree:items");
+    expect(decide).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a group that already appeared on the shortlist", async () => {
+    const decide = scriptDecisions((key) => (key === "group" ? "none" : undefined));
+    await expect(
+      extract(`[page] document\n  [heading] heading: Operating modes\n${table(modes)}`),
+    ).rejects.toThrow("unresolved:items");
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry when two omitted groups share the requested heading", async () => {
+    const decide = scriptDecisions((key) => (key === "group" ? "none" : undefined));
+    await expect(
+      extract(tree(table(modes), table(["Paused", "Stopped", "Offline"], "previous", "gridcell"))),
+    ).rejects.toThrow("unresolved:items");
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not use a heading cited only in an exclusion", async () => {
+    const decide = scriptDecisions((key) => (key === "group" ? "none" : undefined));
+    await expect(
+      extract(
+        tree(table(modes)),
+        "List every mode name. Exclude the names in the Operating modes table.",
+      ),
+    ).rejects.toThrow("unresolved:items");
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("extraction acceptance", () => {
   it("keeps rejected rows out of a fixed-count result when too few qualify", async () => {
     scriptDecisions((key) =>
