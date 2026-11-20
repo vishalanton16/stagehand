@@ -16,6 +16,7 @@ import {
   NONE,
   ask,
   choiceOf,
+  noulOf,
   numberCandidates,
   valueFromFact,
   problem,
@@ -32,6 +33,10 @@ import { rankGroups, describeGroup } from "./listMapping.js";
 // Keep the mapper and the independent reader on the same bounded evidence.
 // Short prefix previews can hide the requested fact later in a paragraph.
 const SCALAR_EVIDENCE_LIMIT = 1500;
+
+function describeFact(fact: Fact): string {
+  return `${fact.label ? `[${clip(fact.label, 180)}] ` : ""}${clip(fact.value, SCALAR_EVIDENCE_LIMIT)}`;
+}
 
 function rankFacts(view: DataView, field: Field, instruction: string): Fact[] {
   const own = tokens(fieldText(field));
@@ -96,14 +101,7 @@ export async function readScalars(
       type: "choice",
       instructions: `Task: ${instruction}\nWhich page text holds "${fieldText(field)}"? Prefer an explicitly stated precise value over an approximate summary of the same fact. Do not calculate or infer an unstated value.`,
       criteria: {
-        ...Object.fromEntries(
-          facts.map((fact, i) => {
-            return [
-              `t${i}`,
-              `${fact.label ? `[${clip(fact.label, 180)}] ` : ""}${clip(fact.value, SCALAR_EVIDENCE_LIMIT)}`,
-            ];
-          }),
-        ),
+        ...Object.fromEntries(facts.map((fact, i) => [`t${i}`, describeFact(fact)])),
         [NONE]: "None of these",
       },
     };
@@ -149,6 +147,7 @@ export async function readScalars(
   ] as const);
 
   const data: Record<string, unknown> = {};
+  const mappedFacts = new Map<string, Fact>();
   const ambiguous: Record<string, DecisionQuestion> = {};
   const candidatesFor = new Map<string, { value: number; shown: string }[]>();
   for (const field of fields) {
@@ -168,6 +167,7 @@ export async function readScalars(
     }
     const value = valueFromFact(fact, field);
     if (value !== undefined) {
+      if (numeric) mappedFacts.set(field.name, fact);
       data[field.name] = value;
       trace.push({
         step: `${field.name}:source`,
@@ -197,7 +197,12 @@ export async function readScalars(
     const group = groups.find((candidate) => candidate.id === picked.choice);
     if (group) {
       const record = await readRecord(config, view, group, fields, instruction, trace);
-      if (record) Object.assign(data, record);
+      if (record) {
+        for (const [name, value] of Object.entries(record)) {
+          if (data[name] !== value) mappedFacts.delete(name);
+        }
+        Object.assign(data, record);
+      }
     }
   }
 
@@ -223,12 +228,85 @@ export async function readScalars(
     }
   }
 
+  if (reader) {
+    await checkNumericPrecision(
+      config,
+      fields,
+      instruction,
+      options,
+      mappedFacts,
+      data,
+      read,
+      trace,
+    );
+  }
+
   for (const field of fields) {
     if (data[field.name] !== undefined || !field.required) continue;
     if (field.nullable) data[field.name] = null;
     else throw new Error(`unresolved:${field.name}`);
   }
   return data;
+}
+
+function decimalSpellings(fact: Fact): string[] {
+  return Array.from(
+    clip(fact.value, SCALAR_EVIDENCE_LIMIT).matchAll(
+      /(?<![\p{L}\p{N}.,+−-])\d+(?:\.\d+)?(?![\p{L}\p{N}]|[.,]\d)/gu,
+    ),
+    ([spelling]) => spelling,
+  );
+}
+
+async function checkNumericPrecision(
+  config: DecisionModelConfig,
+  fields: Field[],
+  instruction: string,
+  options: Map<string, Fact[]>,
+  mappedFacts: Map<string, Fact>,
+  data: Record<string, unknown>,
+  read: Record<string, unknown>,
+  trace: TraceEntry[],
+): Promise<void> {
+  const checks: Record<string, DecisionQuestion> = {};
+  for (const field of fields) {
+    const { name } = field;
+    const selected = mappedFacts.get(name);
+    const value = data[name];
+    if (
+      !selected ||
+      read[name] !== undefined ||
+      typeof value !== "number" ||
+      !Number.isSafeInteger(value) ||
+      value < 0
+    )
+      continue;
+    const spelling = String(value);
+    if (!decimalSpellings(selected).includes(spelling)) continue;
+    // A shared prefix only shortlists excerpts. The provider has to establish
+    // that an excerpt refers to the requested fact and source.
+    const competing = options
+      .get(name)!
+      .filter(
+        (fact) =>
+          fact !== selected &&
+          decimalSpellings(fact).some((candidate) => candidate.startsWith(`${spelling}.`)),
+      )
+      .slice(0, 8);
+    if (!competing.length) continue;
+    checks[`verify_${name}`] = {
+      type: "noul",
+      instructions: `Task: ${instruction}\nFor "${fieldText(field)}", does any competing excerpt directly state a more precise number for the same quantity, in the requested unit and from the requested source? Answer no if the selected approximation or source is what the task requests. Ignore formulas and different facts. Do not calculate.\nSelected excerpt: ${describeFact(selected)}\nCompeting excerpts: ${JSON.stringify(competing.map(describeFact))}`,
+    };
+  }
+  if (!Object.keys(checks).length) return;
+  const { answers } = await ask(config, { task: instruction }, checks);
+  for (const key of Object.keys(checks)) {
+    const name = key.slice("verify_".length);
+    const probability = noulOf(answers, key);
+    trace.push({ step: `${name}:verify-number`, choice: key, confidence: probability, options: 2 });
+    if (probability >= 0.5) problem(trace, `scalar-precision:${name}`);
+  }
 }
 
 function sameValue(a: unknown, b: unknown): boolean {

@@ -321,6 +321,73 @@ describe("extraction acceptance", () => {
     ).rejects.toThrow("unresolved:count");
   });
 
+  it.each([
+    {
+      instruction: "Extract the exact upstream reading in meters.",
+      probability: 0.9,
+      problems: ["scalar-precision:height"],
+    },
+    {
+      instruction: "Extract the approximate upstream reading from the summary.",
+      probability: 0.1,
+      problems: [],
+    },
+  ])(
+    "checks competing precision when the reader is empty ($instruction)",
+    async ({ instruction, probability, problems }) => {
+      const decide = scriptDecisions((key) => (key === "verify_height" ? probability : undefined));
+      const result = await mapCopyExtract(
+        { apiKey: "test" },
+        {
+          instruction,
+          schema: {
+            type: "object",
+            required: ["height"],
+            properties: { height: { type: "number" } },
+          },
+          tree: `[1] document
+  [2] paragraph: Upstream summary height: about 48 meters.
+  [3] paragraph: Upstream sensor height: 48.27 meters.
+  [4] paragraph: Downstream sensor height: 148.29 meters.`,
+          urlMap: {},
+          reader: async () => ({}),
+        },
+      );
+      expect(result.data).toEqual({ height: 48 });
+      expect(result.verdict.problems).toEqual(problems);
+      expect(decide).toHaveBeenCalledTimes(2);
+      const question = decide.mock.calls[1]?.[2].verify_height;
+      expect(question?.type).toBe("noul");
+      expect(question?.instructions).toContain("48.27 meters");
+      expect(question?.instructions).not.toContain("148.29 meters");
+    },
+  );
+
+  it("keeps a supported explicit zero and skips checking an absent optional field", async () => {
+    const decide = scriptDecisions((key) => (key === "f_total" ? "t2" : undefined));
+    const result = await mapCopyExtract(
+      { apiKey: "test" },
+      {
+        instruction: "Extract unresolved defects and the total only if stated.",
+        schema: {
+          type: "object",
+          required: ["unresolved"],
+          properties: { unresolved: { type: "integer" }, total: { type: "number" } },
+        },
+        tree: `[1] document
+  [2] paragraph: Unresolved defects: 0
+  [3] paragraph: Fraction of defects unresolved in earlier reports: 0.2
+  [4] paragraph: Resolved defects: 12
+  [5] paragraph: Average resolved defects over past releases: 12.5`,
+        urlMap: {},
+        reader: async () => ({ unresolved: "0" }),
+      },
+    );
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(result.data).toEqual({ unresolved: 0 });
+    expect(result.verdict.problems).toEqual([]);
+  });
+
   it("rejects a missing numeric position instead of copying a different number", async () => {
     scriptDecisions((key) => (key === "n_year" ? "p1" : undefined));
     const result = await mapCopyExtract(
