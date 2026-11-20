@@ -1,0 +1,95 @@
+{
+  "build": {
+    "revision": "c04b4c31e43154c3e420073ca368187e64bb0008",
+    "sdk": "b026260286dcc992ac6592c9b396b65dece0c21b6c249439b7f3e8a71ca6485a",
+    "extension": "39cd79c762112d93614f5382e2503cdc8722e5a7d8d65733c5360b1a2fd25a50",
+    "lockfile": "ada290d762dabb5d37ddf590769d950875e237a594c8da61fac1e61a47d7bae3"
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "chrome": "Chrome/158.0.8127.37",
+  "captures": [
+    {
+      "site": "books",
+      "url": "https://books.toscrape.com/catalogue/category/books/travel_2/index.html",
+      "status": 200,
+      "navigationMs": 8749,
+      "sampledAt": "2026-11-20T06:14:12.575Z",
+      "snapshotMs": 26,
+      "outlineSha256": "fcb542b7a60cc81367f883a3968f72319d06080da0b50ebde158acb6fff01ea8",
+      "outlineBytes": 12393,
+      "file": "books.html",
+      "sha256": "a4bf91874c9978aa5fb7534d7b45efac7db73daaacd060487d4cfd44852cd73a",
+      "bytes": 35830,
+      "audited": [
+        {
+          "id": "books-heading",
+          "pass": true,
+          "actual": ["Travel"]
+        },
+        {
+          "id": "books-breadcrumb",
+          "pass": true,
+          "actual": ["Books"]
+        },
+        {
+          "id": "books-absent",
+          "pass": true,
+          "actual": []
+        },
+        {
+          "id": "books-price",
+          "pass": true,
+          "actual": {
+            "price": "£45.17"
+          }
+        },
+        {
+          "id": "books-record",
+          "pass": true,
+          "actual": {
+            "price": "£45.17",
+            "availability": "In stock"
+          }
+        }
+      ]
+    },
+    {
+      "site": "iana",
+      "url": "https://www.iana.org/help/example-domains",
+      "status": 200,
+      "navigationMs": 1130,
+      "sampledAt": "2026-11-20T06:14:13.798Z",
+      "snapshotMs": 12,
+      "outlineSha256": "260546dff42fb26347d91d312d104bf625fdaedfbf1ba49d0f38d1e93a5d4cb3",
+      "outlineBytes": 4357,
+      "file": "iana.html",
+      "sha256": "6c169954d345e6893c27ea0f3cfca3a93f4fee0ec2e2896a5d223e04664d8dbe",
+      "bytes": 5036,
+      "audited": [
+        {
+          "id": "iana-further-reading",
+          "pass": true,
+          "actual": [
+            "IANA-managed Reserved Domains",
+            "Special-Use Domain Names",
+            "Reserved Top Level DNS Names"
+          ]
+        },
+        {
+          "id": "iana-reading-urls",
+          "pass": true,
+          "actual": {
+            "urls": [
+              "https://www.iana.org/domains/reserved",
+              "https://www.iana.org/go/rfc6761",
+              "https://www.iana.org/go/rfc2606"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
