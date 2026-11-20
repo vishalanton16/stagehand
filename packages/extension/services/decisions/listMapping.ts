@@ -80,11 +80,12 @@ function recoveryGroup(view: DataView, shortlist: Group[], instruction: string):
       1,
     )[0]!,
   )} `;
-  const headings = new Set(
-    view.nodes
-      .filter((node) => node.role.toLowerCase() === "heading" && tokens(node.name).size >= 2)
-      .map((node) => normalize(node.name)),
-  );
+  const headings = new Map<string, number>();
+  for (const node of view.nodes) {
+    if (node.role.toLowerCase() !== "heading" || tokens(node.name).size < 2) continue;
+    const title = normalize(node.name);
+    headings.set(title, (headings.get(title) ?? 0) + 1);
+  }
   const tableRequested = /\btables?\b/.test(request);
   const matches = view.groups.filter((group) => {
     if (
@@ -103,7 +104,7 @@ function recoveryGroup(view: DataView, shortlist: Group[], instruction: string):
           : undefined) ??
         "",
     );
-    if (!headings.has(title)) return false;
+    if (headings.get(title) !== 1) return false;
     return ["in", "under", "from"].some(
       (scope) =>
         request.includes(` ${scope} ${title} `) || request.includes(` ${scope} the ${title} `),

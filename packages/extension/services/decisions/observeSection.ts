@@ -3,7 +3,7 @@ import {
   type ObservationCandidate,
   type ObservationSnapshot,
 } from "./observeCandidates.js";
-import { parseOutline } from "./outline.js";
+import { parseOutline, type OutlineNode } from "./outline.js";
 
 const SECTION_REQUEST =
   /^find all (text )?links in the (?:"([^"\r\n]+)"|“([^“”\r\n]+)”|([^"“”\r\n]+)) section\.?$/iu;
@@ -27,6 +27,31 @@ export function parseObservationSection(
   return { heading: normalize(match[2] ?? match[3] ?? match[4]!), textOnly: Boolean(match[1]) };
 }
 
+function uniqueHeading(nodes: OutlineNode[], request: SectionRequest) {
+  const matches = nodes.filter(
+    (node) => node.role === "heading" && normalize(node.name) === request.heading,
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+export function sectionEvidenceIds(
+  nodes: OutlineNode[],
+  xpathMap: Record<string, string>,
+  request: SectionRequest,
+) {
+  const heading = uniqueHeading(nodes, request);
+  if (!heading || heading.parent === undefined) return [];
+  const parentPath = xpathMap[nodes[heading.parent]!.id];
+  if (!parentPath || !ELEMENT_PATH.test(parentPath)) return [];
+  // Native headings and anchors may be omitted by AX. Verify their DOM facts so hidden
+  // nodes and fragment markers cannot look like gaps in an otherwise complete section.
+  return Object.entries(xpathMap)
+    .filter(
+      ([, path]) => path.startsWith(`${parentPath}/`) && /\/(?:a|h[1-6])(?:\[\d+\])?$/u.test(path),
+    )
+    .map(([id]) => id);
+}
+
 export function resolveObservationSection(
   snapshot: ObservationSnapshot,
   request: SectionRequest,
@@ -36,11 +61,8 @@ export function resolveObservationSection(
     return undefined;
 
   const nodes = parseOutline(snapshot.formattedTree);
-  const headings = nodes.filter(
-    (node) => node.role === "heading" && normalize(node.name) === request.heading,
-  );
-  const heading = headings[0];
-  if (headings.length !== 1 || !heading) return undefined;
+  const heading = uniqueHeading(nodes, request);
+  if (!heading) return undefined;
 
   const { xpathMap, facts } = snapshot;
   const headingPath = xpathMap[heading.id];

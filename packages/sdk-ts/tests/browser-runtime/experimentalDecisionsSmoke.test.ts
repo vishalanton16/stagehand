@@ -121,6 +121,33 @@ describe("experimental decisions in a real browser", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it("resolves an explicit link section without modeling unrelated links", async () => {
+    const [page] = await browser.context.pages();
+    await page.evaluate(() => {
+      document.body.innerHTML = `
+        <main>
+          <h2>Further Reading</h2>
+          <a name="legacy-reading-anchor"></a>
+          <a aria-hidden="true" href="/hidden">Hidden</a>
+          <ul><li><a id="guide" href="/guide">Guide</a></li></ul>
+          <h3>Reference material</h3>
+          <p><a id="reference" href="/reference">Reference</a></p>
+          <h2>Other Links</h2>
+          <p><a id="contact" href="/contact">Contact</a></p>
+        </main>`;
+    });
+    const result = await stagehand.experimentalDecisions.observe(
+      "Find all links in the Further Reading section.",
+      { page },
+    );
+    expect(result.data.map(({ description }) => description)).toEqual([
+      "link: Guide",
+      "link: Reference",
+    ]);
+    expect(await worker("globalThis.__decisionRequested")).toBe(false);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it("does not click a replacement inserted while the decision is pending", async () => {
     const [page] = await browser.context.pages();
     await worker("globalThis.__holdDecision = true");

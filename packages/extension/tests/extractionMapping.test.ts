@@ -132,6 +132,20 @@ describe("list group recovery", () => {
     expect(decide).toHaveBeenCalledTimes(1);
   });
 
+  it("does not infer a unique scope from repeated headings with different record shapes", async () => {
+    const decide = scriptDecisions((key) => (key === "group" ? "none" : undefined));
+    await expect(
+      extract(
+        tree(
+          table(modes),
+          "  [second-heading] heading: Operating modes",
+          "  [empty] paragraph: No modes available",
+        ),
+      ),
+    ).rejects.toThrow("unresolved:items");
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
   it("does not use a heading cited only in an exclusion", async () => {
     const decide = scriptDecisions((key) => (key === "group" ? "none" : undefined));
     await expect(
