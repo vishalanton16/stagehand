@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("Eve Stagehand facade tools", () => {
   it("uses the canonical facade descriptions", () => {
     expect(runTool.description).toBe(RUN_TOOL_DESCRIPTION);
-    expect(runTool.description).toContain('never "kind"');
+    expect(runTool.description).toContain('Actions use "op" and a string "id"');
     expect(snapshotTool.description).toBe(SNAPSHOT_TOOL_DESCRIPTION);
     expect(screenshotTool.description).toBe(SCREENSHOT_TOOL_DESCRIPTION);
   });

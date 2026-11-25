@@ -138,18 +138,14 @@ describe("Stagehand facade contract", () => {
 
   it("pins the three tool names and descriptions", () => {
     expect(FACADE_TOOLS.map((tool) => tool.name)).toStrictEqual(["run", "snapshot", "screenshot"]);
-    expect(FACADE_TOOLS[0].description).toContain("Browse and automate websites");
-    expect(FACADE_TOOLS[0].description).toContain('await page.goto("https://example.com")');
-    expect(FACADE_TOOLS[0].description).toContain("no separate navigate or start tool");
-    expect(FACADE_TOOLS[0].description).toContain('"op" (never "kind")');
-    expect(FACADE_TOOLS[0].description).toContain('"id" (never "ref")');
-    expect(FACADE_TOOLS[0].description).toContain('{"actions":[{"op":"click","id":"1-42"}]}');
-    expect(FACADE_TOOLS[0].description).toContain(
-      '{"actions":[{"op":"fill","id":"2-14","value":"Miami"}]}',
+    const runDescription = FACADE_TOOLS[0].description;
+    expect(runDescription).toContain("Pass exactly one of code or snapshot actions.");
+    expect(runDescription).toContain("await page.goto(url)");
+    expect(runDescription).toContain(
+      "Filter before shortening. Check all records for exhaustive queries.",
     );
-    expect(FACADE_TOOLS[0].description).toContain(
-      '{"actions":[{"op":"select","id":"3-9","values":"Lowest price"}]}',
-    );
+    expect(runDescription).toContain("Treat excerpts as partial evidence");
+    expect(runDescription).toContain('{"actions":[{"op":"click","id":"1-42"}]}');
     expect(FACADE_TOOLS[2].description).toContain('{"type":"jpeg","quality":40,"fullPage":false}');
   });
 
@@ -165,9 +161,16 @@ describe("Stagehand facade contract", () => {
     }
   });
 
+  it("fits the default FX tool discovery description limit", () => {
+    const escaped = FACADE_TOOLS[0].description
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#x27;");
+    expect(Buffer.byteLength(escaped)).toBeLessThanOrEqual(1024);
+  });
+
   it("advertises the Playwright idiom and no Stagehand AI methods", () => {
-    expect(FACADE_TOOLS[0].description).toContain("page, context, and browser in scope");
-    expect(FACADE_TOOLS[0].description).toContain("Playwright-shaped API");
+    expect(FACADE_TOOLS[0].description).toContain("Playwright-shaped page, context, and browser");
     expect(FACADE_AGENT_INSTRUCTIONS).toContain("Playwright page, context, and browser");
     expect(FACADE_AGENT_INSTRUCTIONS).toContain("page.getByRole(");
     for (const text of [FACADE_TOOLS[0].description, FACADE_AGENT_INSTRUCTIONS]) {

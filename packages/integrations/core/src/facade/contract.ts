@@ -41,7 +41,16 @@ const actionSchema = (op: string, extra: Record<string, Record<string, unknown>>
 const RUN_SCREENSHOT_PATH_NOTE =
   "page.screenshot({ path }) saves a .png, .jpg or .jpeg file relative to the host's artifact directory (./stagehand-artifacts under the host's working directory unless the host configures another).";
 
-export const RUN_TOOL_DESCRIPTION = `Browse and automate websites in the persistent browser by executing JavaScript against a Playwright-shaped API. The code runs inside an async function with page, context, and browser in scope (Playwright Page, BrowserContext, and Browser); use await directly and return a JSON-serializable value when useful. Navigate with await page.goto("https://example.com"); there is no separate navigate or start tool. ${RUN_SCREENSHOT_PATH_NOTE} Alternatively, provide a batch of actions using IDs from the latest snapshot. Provide exactly one of code or actions. Each action must use "op" (never "kind") and "id" (never "ref"). Copy the bracketed snapshot ID as a string. Examples: {"actions":[{"op":"click","id":"1-42"}]}, {"actions":[{"op":"fill","id":"2-14","value":"Miami"}]}, {"actions":[{"op":"select","id":"3-9","values":"Lowest price"}]}.`;
+export const RUN_TOOL_DESCRIPTION = [
+  "Browse or act in the persistent browser. Pass exactly one of code or snapshot actions.",
+  "Code runs with the Playwright-shaped page, context, and browser; use await directly.",
+  "Navigate and filter in the same call. For targeted tasks, avoid full-page text or HTML.",
+  "Extract matching elements and return only relevant fields, IDs, and source URLs.",
+  'Example: await page.goto(url); return await page.getByRole("row").filter({hasText:"Renewal"}).first().innerText();',
+  "Filter before shortening. Check all records for exhaustive queries. Treat excerpts as partial evidence and inspect more as needed.",
+  'Actions use "op" and a string "id" from the latest snapshot. Example: {"actions":[{"op":"click","id":"1-42"}]}.',
+  RUN_SCREENSHOT_PATH_NOTE,
+].join(" ");
 
 /**
  * Run-tool description of the pre-Playwright-idiom facade surface, kept as
